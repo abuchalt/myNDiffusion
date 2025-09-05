@@ -56,6 +56,22 @@ Deltay = h/(j_max-1);
 residual = 1.0E5; % init residual
 epsilon = 1.0E-12; % drive residual down to this value before terminating
 
+% Define x and y values in spatial domain
+for i = 1:i_max
+    for j = 1:j_max
+        x(i,j) = Deltax*(i-1);
+        y(i,j) = Deltay*(j-1);
+    end
+end
+
+% File Info
+myCWD = pwd
+subfolder='results\\project1\\'+string(i_max)+'x'+string(j_max);
+mkdir(fullfile(myCWD,subfolder));
+
+%% Script
+% ------------------------------------------------------------------------------
+
 %% Functions
 % ------------------------------------------------------------------------------
 
