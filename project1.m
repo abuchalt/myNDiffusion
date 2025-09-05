@@ -22,7 +22,7 @@ clear all; close all; clc;
 %          --------|------J_n------|--------
 %                  |       |       |        
 %                  |               |        
-%          o  <---J_w---   o   ---J_e--->  o        \vec{J} = D \grad\phi
+%          o  <---J_w---   o   ---J_e--->  o        \vec{J} = -D \grad\phi
 %                  |               |        
 %                  |       |       |        
 %          --------|------J_s------|--------
@@ -36,8 +36,21 @@ clear all; close all; clc;
 % ------------------------------------------------------------------------------
 
 % Define physical domain
-h = 1.0;
-w = 1.0;
+A = 1.0;
+B = 1.0;
+
+% Input parameters
+Sigma_tr = 3.62E-2; % Macroscopic Transport Cross-Section [cm^-1]
+Sigma_a = 0.1532; % Macroscopic Absorption Cross-Section [cm^-1]
+nuSigma_f = 0.1570; % Product of Macroscopic Fission Cross-Section and Neutrons per Fission [cm^-1]
+% Calculated Constant Parameters
+D = 1.0/(3.0*(Sigma_a+Sigma_tr)); % Diffusion Coefficient [cm]
+L = sqrt(D/Sigma_a); % Characteristic Diffusion Length [cm]
+% Unitless Constants
+Abar = A/L;
+Bbar = B/L;
+LSig_a = L*Sigma_a;
+LnuSig_f = L*nuSigma_f;
 
 % Define mesh size
 fprintf('Maximum number of points in x-direction') % separate print and input
@@ -47,18 +60,12 @@ fprintf('Maximum number of points in y-direction')
 j_max = input('');
 
 % Calculate step sizes
-Deltax = w/(i_max-1);
-Deltay = h/(j_max-1);
+Deltax = A/(i_max-1);
+Deltay = B/(j_max-1);
+Deltaxbar = Abar/(i_max-1);
+Deltaybar = Bbar/(j_max-1);
 
-% Input parameters
-Sigma_tr = 3.62E-2; % Macroscopic Transport Cross-Section (cm^-1)
-Sigma_a = 0.1532; % Macroscopic Absorption Cross-Section (cm^-1)
-nuSigma_f = 0.1570; % Product of Macroscopic Fission Cross-Section and Neutrons per Fission (cm^-1)
-% Calculated Constant Parameters
-D_A = 1.0/(3.0*(Sigma_a+Sigma_tr)); % Diffusion Coefficient (cm^2)
-L_A = sqrt(D_A/Sigma_a); % Characteristic Diffusion Length (cm)
-
-% And define variables for power-iteration
+% Define variables for power-iteration
 residual = 1.0E5; % init residual
 epsilon = 1.0E-12; % drive residual down to this value before terminating
 
@@ -71,7 +78,7 @@ for i = 1:i_max
 end
 
 % File Info
-myCWD = pwd
+myCWD = pwd;
 subfolder='results\\project1\\'+string(i_max)+'x'+string(j_max);
 mkdir(fullfile(myCWD,subfolder));
 
@@ -98,13 +105,13 @@ for i = 2:i_max-1
         k_s = k - i_max;
 
         % pointer mapping goes row-by-row to assemble Coeff. Matrix
-        M(k,k) = (Sigma_a/Re) + (2.0*D/Deltax^2)/Re + (2.0*D/Deltay^2)/Re;
-        M(k,k_e) = (-1.0*D/Deltax^2)/Re;
-        M(k,k_w) = (-1.0*D/Deltax^2)/Re;
-        M(k,k_n) = (-1.0*D/Deltay^2)/Re;
-        M(k,k_s) = (-1.0*D/Deltay^2)/Re;
+        M(k,k) = LSig_a*(1.0 + (2.0/Deltaxbar^2) + (2.0/Deltaybar^2));
+        M(k,k_e) = (-1.0*LSig_a/Deltaxbar^2);
+        M(k,k_w) = (-1.0*LSig_a/Deltaxbar^2);
+        M(k,k_n) = (-1.0*LSig_a/Deltaybar^2);
+        M(k,k_s) = (-1.0*LSig_a/Deltaybar^2);
 
-        F(k,k) = (1.0*nu*Sigma_f/k)/Re;
+        F(k,k) = (1.0*LnuSig_f/k);
     end
 end
 M = sparse(M); % Enforce Coeffs sparse
