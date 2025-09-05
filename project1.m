@@ -51,6 +51,12 @@ Deltax = w/(i_max-1);
 Deltay = h/(j_max-1);
 
 % Input parameters
+Sigma_tr = 3.62E-2; % Macroscopic Transport Cross-Section (cm^-1)
+Sigma_a = 0.1532; % Macroscopic Absorption Cross-Section (cm^-1)
+nuSigma_f = 0.1570; % Product of Macroscopic Fission Cross-Section and Neutrons per Fission (cm^-1)
+% Calculated Constant Parameters
+D_A = 1.0/(3.0*(Sigma_a+Sigma_tr)); % Diffusion Coefficient (cm^2)
+L_A = sqrt(D_A/Sigma_a); % Characteristic Diffusion Length (cm)
 
 % And define variables for power-iteration
 residual = 1.0E5; % init residual
