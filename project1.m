@@ -82,18 +82,18 @@ myCWD = pwd;
 subfolder='results\\project1\\'+string(i_max)+'x'+string(j_max);
 mkdir(fullfile(myCWD,subfolder));
 
-%% Script
+%% Build Coefficient Matrices
 % ------------------------------------------------------------------------------
 % Init coeff matrices
 M = spalloc(i_max*j_max, i_max*j_max, 5*i_max*j_max); % Sparsely allocate transport matrix with 5 bands
 F = spalloc(i_max*j_max, i_max*j_max, 1*i_max*j_max); % Sparsely allocate fission matrix with 1 band
 
 % Init Solution Variables (1D because we use pointer mapping)
-psi = ones(i_max*j_max,1);
-k = 1;
+phi = ones(i_max*j_max,1);
+keff = 1;
 % "Old" Solution for computing residual
-psi_old = ones(i_max*j_max,1);
-k_old = 1;
+phi_old = ones(i_max*j_max,1);
+keff_old = 1;
 
 % Define Coefficient Matrix
 for i = 2:i_max-1
@@ -124,7 +124,9 @@ for i = 1:1
         k = pmap(i,j,i_max);
         % k_e = k + 1;
         % k_ee = k + 2;
-        psi(k) = 0; % Zero-flux
+        phi(k) = 0; % Zero-flux
+        M(k,k) = 1;
+        F(k,k) = 1;
     end
 end
 % Right BC
@@ -133,7 +135,9 @@ for i = i_max:i_max
         k = pmap(i,j,i_max);
         % k_w = k - 1;
         % k_ww = k - 2;
-        psi(k) = 0; % Zero-flux
+        phi(k) = 0; % Zero-flux
+        M(k,k) = 1;
+        F(k,k) = 1;
     end
 end
 % Bottom BC
@@ -142,7 +146,9 @@ for i = 1:i_max
         k = pmap(i,j,i_max);
         % k_n = k + i_max;
         % k_nn = k + 2*i_max;
-        psi(k) = 0; % Zero-flux
+        phi(k) = 0; % Zero-flux
+        M(k,k) = 1;
+        F(k,k) = 1;
     end
 end
 % Top BC
@@ -151,8 +157,44 @@ for i = 1:i_max
         k = pmap(i,j,i_max);
         % k_s = k - i_max;
         % k_ss = k - 2*i_max;
-        psi(k) = 0; % Zero-flux
+        phi(k) = 0; % Zero-flux
+        M(k,k) = 1;
+        F(k,k) = 1;
     end
+end
+
+%% Power-Iteration Script
+% ------------------------------------------------------------------------------
+
+% Compute evolution operator initially to minimize work in loop
+Amat = inv(M) * F;
+
+% Init iteration vars
+tTot = 0;
+iter = 0;
+
+% Begin iteraiton
+while (residual > epsilon)
+% while (iter<2)
+
+    tStart = tic;
+
+    % Track previous source vector, flux vector, and k
+    phi_old = phi;
+    keff_old = keff;
+
+    % Solve new guess of Phi
+    phi = Amat * phi; % Evolve Flux
+    phi = phi/norm(phi); % Normalize
+    phiT = transpose(phi);
+    keff = phiT * Amat; % Search Dominant Eigenvalue
+
+    % Compute the new residual
+    residual = norm(phi-phi_old);
+    residual = residual/(i_max*j_max); % Normalize for DOF
+
+    fprintf(1,'iter = %i, residual = %g\n',iter,log10(residual));
+    iter = iter + 1;
 end
 
 %% Functions
