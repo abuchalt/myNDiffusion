@@ -117,6 +117,44 @@ end
 M = sparse(M); % Enforce Coeffs sparse
 F = sparse(F);
 
+% Apply BCs on initial guess
+% Left BC
+for i = 1:1
+    for j = 1:j_max
+        k = pmap(i,j,i_max);
+        % k_e = k + 1;
+        % k_ee = k + 2;
+        psi(k) = 0; % Zero-flux
+    end
+end
+% Right BC
+for i = i_max:i_max
+    for j = 1:j_max
+        k = pmap(i,j,i_max);
+        % k_w = k - 1;
+        % k_ww = k - 2;
+        psi(k) = 0; % Zero-flux
+    end
+end
+% Bottom BC
+for i = 1:i_max
+    for j = 1:1
+        k = pmap(i,j,i_max);
+        % k_n = k + i_max;
+        % k_nn = k + 2*i_max;
+        psi(k) = 0; % Zero-flux
+    end
+end
+% Top BC
+for i = 1:i_max
+    for j = j_max:j_max
+        k = pmap(i,j,i_max);
+        % k_s = k - i_max;
+        % k_ss = k - 2*i_max;
+        psi(k) = 0; % Zero-flux
+    end
+end
+
 %% Functions
 % ------------------------------------------------------------------------------
 
