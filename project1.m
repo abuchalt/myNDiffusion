@@ -71,10 +71,43 @@ mkdir(fullfile(myCWD,subfolder));
 
 %% Script
 % ------------------------------------------------------------------------------
+% Init coeff matrices
+M = spalloc(i_max*j_max, i_max*j_max, 5*i_max*j_max); % Sparsely allocate transport matrix with 5 bands
+F = spalloc(i_max*j_max, i_max*j_max, 1*i_max*j_max); % Sparsely allocate fission matrix with 1 band
+
+% Init Solution Variables (1D because we use pointer mapping)
+psi = ones(i_max*j_max,1);
+k = 1;
+% "Old" Solution for computing residual
+psi_old = ones(i_max*j_max,1);
+k_old = 1;
+
+% Define Coefficient Matrix
+for i = 2:i_max-1
+    for j = 2:j_max-1
+        k = pmap(i, j, i_max);
+        k_e = k + 1;
+        k_w = k - 1;
+        k_n = k + i_max;
+        k_s = k - i_max;
+
+        % pointer mapping goes row-by-row to assemble Coeff. Matrix
+        M(k,k) = (Sigma_a/Re) + (2.0*D/Deltax^2)/Re + (2.0*D/Deltay^2)/Re;
+        M(k,k_e) = (-1.0*D/Deltax^2)/Re;
+        M(k,k_w) = (-1.0*D/Deltax^2)/Re;
+        M(k,k_n) = (-1.0*D/Deltay^2)/Re;
+        M(k,k_s) = (-1.0*D/Deltay^2)/Re;
+
+        F(k,k) = (1.0*nu*Sigma_f/k)/Re;
+    end
+end
+M = sparse(M); % Enforce Coeffs sparse
+F = sparse(F);
 
 %% Functions
 % ------------------------------------------------------------------------------
 
+% Pointer mapping function for 2D->1D transform of solution
 function k = pmap(i, j, i_max)
     k = i + (j-1)*i_max;
 end
