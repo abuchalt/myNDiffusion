@@ -55,3 +55,10 @@ Deltay = h/(j_max-1);
 % And define variables for power-iteration
 residual = 1.0E5; % init residual
 epsilon = 1.0E-12; % drive residual down to this value before terminating
+
+%% Functions
+% ------------------------------------------------------------------------------
+
+function k = pmap(i, j, i_max)
+    k = i + (j-1)*i_max;
+end
