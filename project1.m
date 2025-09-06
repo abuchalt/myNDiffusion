@@ -35,10 +35,6 @@ clear all; close all; clc;
 %% Computational Parameters
 % ------------------------------------------------------------------------------
 
-% Define physical domain
-A = 10.0;
-B = 10.0;
-
 % Input parameters
 Sigma_tr = 3.62E-2; % Macroscopic Transport Cross-Section [cm^-1]
 Sigma_a = 0.1532; % Macroscopic Absorption Cross-Section [cm^-1]
@@ -46,6 +42,14 @@ nuSigma_f = 0.1570; % Product of Macroscopic Fission Cross-Section and Neutrons 
 % Calculated Constant Parameters
 D = 1.0/(3.0*(Sigma_a+Sigma_tr)); % Diffusion Coefficient [cm]
 L = sqrt(D/Sigma_a); % Characteristic Diffusion Length [cm]
+
+% Analytical Critical Dimension [cm]
+critDim = pi * sqrt(2.0*D/(nuSigma_f-Sigma_a));
+
+% Define physical domain
+A = critDim; % x-Length [cm]
+B = critDim; % y-Width [cm]
+
 % Unitless Constants
 Abar = A/L;
 Bbar = B/L;
@@ -165,15 +169,16 @@ end
 
 %% Power-Iteration Script
 % ------------------------------------------------------------------------------
-
+fprintf('test')
 % Compute evolution operator initially to minimize work in loop
-Amat = inv(M) * F;
+% Amat = inv(M)*F % Slowww
+Amat = M\F;
 
 % Init iteration vars
 tTot = 0;
 iter = 0;
 
-% Begin iteraiton
+% Begin iteration
 while (residual > epsilon)
 % while (iter<2)
 
@@ -205,6 +210,9 @@ while (residual > epsilon)
         title('Flux Surface');
         drawnow;
     end
+
+    tTot = tTot + toc(tStart);
+
     fprintf(1,'iter = %i, residual = %g\n',iter,log10(residual));
     iter = iter + 1;
 end
@@ -221,6 +229,21 @@ xlabel('x');
 title('Flux Surface');
 
 fprintf(1,'keff = %f\n',keff);
+
+%% Store Results
+% ------------------------------------------------------------------------------
+
+saveas(figure(1),fullfile(myCWD,subfolder,'fluxContour.jpg'));
+
+% And Solution Matrix
+save(fullfile(myCWD,subfolder,'phi.mat'), 'phi');
+save(fullfile(myCWD,subfolder,'keff.mat'), 'keff');
+
+% And Timing Info
+tAvg = tTot/iter;
+fid = fopen(fullfile(myCWD,subfolder,'time.txt'),'wt');
+fprintf(fid, 'Total CPU-time: %s s\nAverage Time per Iteration: %s s\n', string(tTot), string(tAvg));
+fclose(fid);
 
 %% Functions
 % ------------------------------------------------------------------------------
