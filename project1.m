@@ -36,8 +36,8 @@ clear all; close all; clc;
 % ------------------------------------------------------------------------------
 
 % Define physical domain
-A = 1.0;
-B = 1.0;
+A = 10.0;
+B = 10.0;
 
 % Input parameters
 Sigma_tr = 3.62E-2; % Macroscopic Transport Cross-Section [cm^-1]
@@ -67,9 +67,9 @@ Deltaybar = Bbar/(j_max-1);
 
 % Define variables for power-iteration
 residual = 1.0E5; % init residual
-epsilon = 1.0E-12; % drive residual down to this value before terminating
+epsilon = 1.0E-16; % drive residual down to this value before terminating
 
-% Define x and y values in spatial domain
+% Define x and y values in spatial domain (fully dimensional)
 for i = 1:i_max
     for j = 1:j_max
         x(i,j) = Deltax*(i-1);
@@ -111,7 +111,7 @@ for i = 2:i_max-1
         M(k,k_n) = (-1.0*LSig_a/Deltaybar^2);
         M(k,k_s) = (-1.0*LSig_a/Deltaybar^2);
 
-        F(k,k) = (1.0*LnuSig_f/k);
+        F(k,k) = (1.0*LnuSig_f);
     end
 end
 M = sparse(M); % Enforce Coeffs sparse
@@ -187,15 +187,40 @@ while (residual > epsilon)
     phi = Amat * phi; % Evolve Flux
     phi = phi/norm(phi); % Normalize
     phiT = transpose(phi);
-    keff = phiT * Amat; % Search Dominant Eigenvalue
+    keff = phiT * (Amat * phi); % Search Dominant Eigenvalue
 
     % Compute the new residual
     residual = norm(phi-phi_old);
     residual = residual/(i_max*j_max); % Normalize for DOF
 
+
+    % Plot solution
+    if mod(iter,100) == 0
+        phiPlot = reshape(phi, i_max, j_max);
+        figure(1);
+        % Plot flux surface
+        surf(x,y,phiPlot);
+        ylabel('y');
+        xlabel('x');
+        title('Flux Surface');
+        drawnow;
+    end
     fprintf(1,'iter = %i, residual = %g\n',iter,log10(residual));
     iter = iter + 1;
 end
+
+%% Visualize Results
+% ------------------------------------------------------------------------------
+
+phiPlot = reshape(phi, i_max, j_max);
+figure(1);
+% Plot flux surface
+surf(x,y,phiPlot);
+ylabel('y');
+xlabel('x');
+title('Flux Surface');
+
+fprintf(1,'keff = %f\n',keff);
 
 %% Functions
 % ------------------------------------------------------------------------------
