@@ -64,10 +64,10 @@ fprintf('Maximum number of points in y-direction')
 j_max = input('');
 
 % Calculate step sizes
-Deltax = A/(i_max-1);
-Deltay = B/(j_max-1);
-Deltaxbar = Abar/(i_max-1);
-Deltaybar = Bbar/(j_max-1);
+Deltax = A/(i_max-1)/2;
+Deltay = B/(j_max-1)/2;
+Deltaxbar = Abar/(i_max-1)/2;
+Deltaybar = Bbar/(j_max-1)/2;
 
 % Define variables for power-iteration
 residual = 1.0E5; % init residual
@@ -81,9 +81,17 @@ for i = 1:i_max
     end
 end
 
+% Define x and y values in complete spatial domain
+for i = 1:(2*i_max)-1
+    for j = 1:(2*j_max)-1
+        fullx(i,j) = Deltax*(i-1);
+        fully(i,j) = Deltay*(j-1);
+    end
+end
+
 % File Info
 myCWD = pwd;
-subfolder='results\\project1\\'+string(i_max)+'x'+string(j_max);
+subfolder='results\\project1Sym\\'+string((2*i_max)-1)+'x'+string((2*i_max)-1);
 mkdir(fullfile(myCWD,subfolder));
 
 %% Build Coefficient Matrices
@@ -124,12 +132,23 @@ F = sparse(F);
 % Apply BCs
 % Left BC
 for i = 1:1
-    for j = 1:j_max
+    for j = 2:j_max-1 % Avoid corners
         k = pmap(i,j,i_max);
+        k_e = k + 1;
+        k_n = k + i_max;
+        k_s = k - i_max;
+        k_w = sympmap(i,j,i_max,j_max)-i_max;
         % k_e = k + 1;
         % k_ee = k + 2;
-        M(k,k) = 1;
-        F(k,k) = 0;
+
+        % Treat as normal internal node with special mapping
+        M(k,k) = LSig_a*(1.0 + (2.0/Deltaxbar^2) + (2.0/Deltaybar^2));
+        M(k,k_e) = M(k,k_e) + (-1.0*LSig_a/Deltaxbar^2);
+        M(k,k_w) = M(k,k_w) + (-1.0*LSig_a/Deltaxbar^2);
+        M(k,k_n) = M(k,k_n) + (-1.0*LSig_a/Deltaybar^2);
+        M(k,k_s) = M(k,k_s) + (-1.0*LSig_a/Deltaybar^2);
+
+        F(k,k) = (1.0*LnuSig_f);
     end
 end
 % Right BC
@@ -153,15 +172,43 @@ for i = 1:i_max
     end
 end
 % Top BC
-for i = 1:i_max
+for i = 2:i_max-1 % Avoid corners
     for j = j_max:j_max
         k = pmap(i,j,i_max);
+        k_e = k + 1;
+        k_w = k - 1;
+        k_s = k - i_max;
+        k_n = sympmap(i,j,i_max,j_max)+1;
         % k_s = k - i_max;
         % k_ss = k - 2*i_max;
-        M(k,k) = 1;
-        F(k,k) = 0;
+
+        % Treat as normal internal node with special mapping
+        M(k,k) = LSig_a*(1.0 + (2.0/Deltaxbar^2) + (2.0/Deltaybar^2));
+        M(k,k_e) = M(k,k_e) + (-1.0*LSig_a/Deltaxbar^2);
+        M(k,k_w) = M(k,k_w) + (-1.0*LSig_a/Deltaxbar^2);
+        M(k,k_n) = M(k,k_n) + (-1.0*LSig_a/Deltaybar^2);
+        M(k,k_s) = M(k,k_s) + (-1.0*LSig_a/Deltaybar^2);
+
+        F(k,k) = (1.0*LnuSig_f);
     end
 end
+
+% Corner/Center Boundary
+i = 1;
+j = j_max;
+k = pmap(i,j,i_max);
+k_e = k + 1;
+k_s = k - i_max;
+k_n = k_e;
+k_w = k_s;
+% Treat as normal internal node with special mapping
+M(k,k) = LSig_a*(1.0 + (2.0/Deltaxbar^2) + (2.0/Deltaybar^2));
+M(k,k_e) = M(k,k_e) + (-1.0*LSig_a/Deltaxbar^2);
+M(k,k_w) = M(k,k_w) + (-1.0*LSig_a/Deltaxbar^2);
+M(k,k_n) = M(k,k_n) + (-1.0*LSig_a/Deltaybar^2);
+M(k,k_s) = M(k,k_s) + (-1.0*LSig_a/Deltaybar^2);
+%
+F(k,k) = (1.0*LnuSig_f);
 
 %% Power-Iteration Script
 % ------------------------------------------------------------------------------
@@ -214,11 +261,17 @@ end
 
 %% Visualize Results
 % ------------------------------------------------------------------------------
-
 phiPlot = reshape(phi, i_max, j_max);
+phiref1 = rot90(phiPlot);
+phiref1 = phiref1(:,2:end);
+phiref1Plot = horzcat(phiPlot, phiref1);
+phiref2 = rot90(phiref1Plot, 2);
+phiref2 = phiref2(1:end-1,:);
+phiref2Plot = vertcat(phiref2, phiref1Plot);
+
 figure(1);
 % Plot flux surface
-surf(x,y,phiPlot);
+surf(fullx,fully,phiref2Plot);
 ylabel('y');
 xlabel('x');
 title('Flux Surface');
@@ -231,7 +284,7 @@ fprintf(1,'keff = %f\n',keff);
 saveas(figure(1),fullfile(myCWD,subfolder,'fluxContour.jpg'));
 
 % And Solution Matrix
-save(fullfile(myCWD,subfolder,'phi.mat'), 'phi');
+save(fullfile(myCWD,subfolder,'phiPlot.mat'), 'phiref2Plot');
 save(fullfile(myCWD,subfolder,'keff.mat'), 'keff');
 
 % And Timing Info
@@ -246,4 +299,8 @@ fclose(fid);
 % Pointer mapping function for 2D->1D transform of solution
 function k = pmap(i, j, i_max)
     k = i + (j-1)*i_max;
+end
+
+function symk = sympmap(i, j, i_max, j_max)
+    symk = (j_max-j+1) + (i_max-i)*j_max;
 end
