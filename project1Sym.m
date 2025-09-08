@@ -234,8 +234,10 @@ while (residual > epsilon)
     % Solve new guess of Phi
     phi = Amat * phi; % Evolve Flux
     phi = phi/norm(phi); % Normalize
-    phiT = transpose(phi);
-    keff = phiT * (Amat * phi); % Search Dominant Eigenvalue
+
+    % Solve new guess of k (optional)
+    % phiT = transpose(phi);
+    % keff = phiT * (Amat * phi); % Search Dominant Eigenvalue
 
     % Compute the new residual
     residual = norm(phi-phi_old);
@@ -260,6 +262,10 @@ while (residual > epsilon)
     iter = iter + 1;
 end
 
+% Final Value of k
+phiT = transpose(phi);
+keff = phiT * (Amat * phi); % Search Dominant Eigenvalue
+
 %% Visualize Results
 % ------------------------------------------------------------------------------
 phiPlot = reshape(phi, i_max, j_max);
@@ -269,6 +275,7 @@ phiref1Plot = horzcat(phiPlot, phiref1);
 phiref2 = rot90(phiref1Plot, 2);
 phiref2 = phiref2(1:end-1,:);
 phiref2Plot = vertcat(phiref2, phiref1Plot);
+phiref2Plot = phiref2Plot/(sum(phiref2Plot,'all')*Deltax*Deltay); % Renormalize by true area under the surface
 
 figure(1);
 % Plot flux surface

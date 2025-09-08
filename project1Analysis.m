@@ -55,23 +55,9 @@ for i = 1:meshes
     myk = matfile(fullfile(mydir,subfolder,'keff.mat'));
     phi = reshape(myphi.phiref2Plot, N, N);
     keff = myk.keff;
-    phiPages(1:minN,1:minN,i) = phi(1:r:N,1:r:N)/norm(phi(1:r:N,1:r:N));
+    phiPages(1:minN,1:minN,i) = phi(1:r:N,1:r:N);
     kList(i) = keff(1);
 end
-
-%% Estimate Order of Convergence by Flux at Center
-% ------------------------------------------------------------------------------
-
-% Init
-f = zeros(meshes, 1);
-
-% Evaluate Order of Convergence Directly
-for i = 1:meshes
-    f(i, 1) = phiPages(midline,midline,i);
-end
-r = 2;
-p2 = log(norm(f(3,1)-f(2,1))/norm(f(2,1)-f(1,1)))/log(r);
-fprintf('Order of Grid Convergence by Flux at Center: %g\n', p2);
 
 %% Graphically Estimate Order of Convergence by keff
 % ------------------------------------------------------------------------------
@@ -137,14 +123,14 @@ for i = 1:meshes
     subfolder=string(N)+'x'+string(N);
     myphi = matfile(fullfile(mydir,subfolder,'phiPlot.mat'));
     phi = reshape(myphi.phiref2Plot, N, N);
+    midline = (N+1)/2;
 
     % Define x and y values in complete spatial domain
     Deltax = A/(N-1);
+    fullx = zeros(N,1);
     for j = 1:N
         fullx(j) = Deltax*(j-1);
     end
-    phi = phi/(Deltax^2); % Renormalize by Mesh Spacing to target same graphical height i.e. multiply by cell areas per cm^2
-    % output of program is (unitless power)/(cell area), and cell area changes with grid refinement... consider building this into diffusion program to get a result in W/cm^2
 
     plot(fullx, phi(midline,:), 'DisplayName', subfolder);
     hold on;
