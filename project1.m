@@ -231,7 +231,7 @@ fprintf(1,'keff = %f\n',keff);
 saveas(figure(1),fullfile(myCWD,subfolder,'fluxContour.jpg'));
 
 % And Solution Matrix
-save(fullfile(myCWD,subfolder,'phi.mat'), 'phi');
+save(fullfile(myCWD,subfolder,'phi.mat'), 'phiPlot');
 save(fullfile(myCWD,subfolder,'keff.mat'), 'keff');
 
 % And Timing Info

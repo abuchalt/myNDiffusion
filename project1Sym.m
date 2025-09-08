@@ -1,10 +1,11 @@
-%% 2D Slab Neutron Diffusion
+%% Symmetric 2D Slab Neutron Diffusion
 % ------------------------------------------------------------------------------
 % Adam Buchalter
 %
 % This is a power-iteration eigenvalue solver for the 2-dimensional neutron 
 % diffusion equation in a cartesian slab geometry employing a pseudo-finite-
-% volume discretization scheme
+% volume discretization scheme with symmetric reflective boundary conditions
+% for optimization
 % ------------------------------------------------------------------------------
 clear all; close all; clc;
 
