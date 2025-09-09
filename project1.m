@@ -186,8 +186,10 @@ while (residual > epsilon)
     % Solve new guess of Phi
     phi = Amat * phi; % Evolve Flux
     phi = phi/norm(phi); % Normalize
-    phiT = transpose(phi);
-    keff = phiT * (Amat * phi); % Search Dominant Eigenvalue
+
+    % Solve new guess of k (optional)
+    % phiT = transpose(phi);
+    % keff = phiT * (Amat * phi); % Search Dominant Eigenvalue
 
     % Compute the new residual
     residual = norm(phi-phi_old);
@@ -211,6 +213,10 @@ while (residual > epsilon)
     fprintf(1,'iter = %i, residual = %g\n',iter,log10(residual));
     iter = iter + 1;
 end
+
+% Final Value of k
+phiT = transpose(phi);
+keff = phiT * (Amat * phi); % Search Dominant Eigenvalue
 
 %% Visualize Results
 % ------------------------------------------------------------------------------
