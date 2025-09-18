@@ -192,7 +192,7 @@ hold off;
 legend;
 ylabel('Difference in Normalized Flux','interpreter','latex');
 xlabel('x-Axis Distance [cm]','interpreter','latex');
-title('Error in Centerline Flux Profile for Different Grid Spacings','interpreter','latex');
+title('Centerline Error Profile for Different Grid Spacings','interpreter','latex');
 xlim([0 A])
 filename = 'globalErrorFlux.jpg';
 saveas(figure(3),fullfile(mydir,filename));
