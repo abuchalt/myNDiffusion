@@ -13,7 +13,7 @@ clear all; close all; clc;
 % ------------------------------------------------------------------------------
 
 % Params
-meshSizes = [257, 129, 65];
+meshSizes = [129, 65, 33];
 myCWD = pwd;
 
 % Quick Maths
@@ -23,6 +23,15 @@ meshes = size(meshSizes, 2);
 assert(meshes>=3, 'Need at Least 3 Grids')
 midline = (minN+1)/2;
 
+resFolder = 'results\\project2';
+
+% ------------------------------------------------------------------------------
+
+%% Grid Convergence Study
+% ------------------------------------------------------------------------------
+
+critdims = [];
+
 for i = 1:meshes
     N = meshSizes(i);
 
@@ -31,23 +40,20 @@ for i = 1:meshes
     resultmat = 'myTable.mat';
     resultOut = fullfile(myCWD,subfolder,resultmat);
 
-    % plotsfolder = [num2str(fuelDim),'_',num2str(modDim),'_',num2str(size)];
-    % plotOut = fullfile(myCWD,subfolder,plotsfolder);
-
     s = load(resultOut);
     dataTable = s.myTable;
     dataTable = sortrows(dataTable, 'keff');
 
-    num2str(s.myTable.keff,'%.5f') % Report to Requested Accuracy
+    % num2str(s.myTable.keff,'%.5f') % Report to Requested Accuracy
 
     numRows = height(dataTable);
     fuelSizes = [];
     keffs = [];
-    for i = 1:numRows
-        fuelSize = dataTable.fuelSize(i);
-        modThick = dataTable.modThick(i);
-        size = dataTable.size(i);
-        keff = dataTable.keff(i);
+    for j = 1:numRows
+        fuelSize = dataTable.fuelSize(j);
+        modThick = dataTable.modThick(j);
+        size = dataTable.size(j);
+        keff = dataTable.keff(j);
         if modThick == 0
             fuelSizes = [fuelSizes, fuelSize];
             keffs = [keffs, keff];
@@ -76,4 +82,84 @@ for i = 1:meshes
     ylabel('Predicted Neutron Multiplication Factor $k_{eff}$','interpreter','latex');
     xlabel('Fuel Slab Size [cm]','interpreter','latex');
     title(string(N)+'x'+string(N)+' Criticality Search','interpreter','latex');
+    filename = 'critSearch.jpg';
+    saveas(figure(i),fullfile(myCWD,subfolder,filename));
+
+    critdims = [critdims, r];
 end
+
+% Init
+f = zeros(meshes, 1);
+
+% Evaluate Order of Convergence Directly
+for i = 1:meshes
+    f(i, 1) = critdims(i);
+end
+r = 2;
+p2 = log(norm(f(1,1)-f(2,1))/norm(f(2,1)-f(3,1)))/log(r);
+fprintf('Order of Grid Convergence by Critical Dimension: %g\n', p2);
+
+% Demonstrate Order of Convergence Graphically
+h = 1./meshSizes;
+% Line of Fit
+coefficients = polyfit(h, critdims, 1);
+xFit = linspace(0, max(h));
+yFit = polyval(coefficients , xFit);
+extrapCritDim = coefficients(end);
+% Inspect Closeness
+figure(i+1);
+plot(h, critdims, '.', 'MarkerSize', 15); % Plot Real Data
+hold on;
+plot(xFit, yFit, 'k--'); % Plot Fit
+% hold on;
+% yl = yline(1,'--','Analytical $k_{eff}$','interpreter','latex');
+% yl.LabelHorizontalAlignment = 'center';
+% yl.Color = [.90 0 0];
+hold on;
+yl = yline(extrapCritDim,'--',['Extrapolated: ',num2str(extrapCritDim,'%.2f'),' cm'],'interpreter','latex');
+yl.LabelHorizontalAlignment = 'center';
+yl.Color = [0 0 .90];
+hold off;
+ylabel('Calculated Critical Dimension [cm]','interpreter','latex');
+xlabel('Relative Grid Spacing $h$','interpreter','latex');
+title('First-Order Convergence in Critical Dimension','interpreter','latex');
+set ( gca, 'XDir', 'reverse' )
+filename = 'GridConvergence_critDim.jpg';
+saveas(figure(i+1),fullfile(myCWD,resFolder,filename));
+
+% ------------------------------------------------------------------------------
+
+%% Reflector Savings Study
+% ------------------------------------------------------------------------------
+
+N = 129; % "Sufficient" discretization for converged solution (only accurate on order of 1 cm)
+
+% File Info
+subfolder = 'results\\project2\\'+string(N)+'x'+string(N);
+resultmat = 'myTable.mat';
+resultOut = fullfile(myCWD,subfolder,resultmat);
+
+% plotsfolder = [num2str(fuelDim),'_',num2str(modDim),'_',num2str(size)];
+% plotOut = fullfile(myCWD,subfolder,plotsfolder);
+
+s = load(resultOut);
+dataTable = s.myTable;
+dataTable = sortrows(dataTable, 'keff');
+
+% num2str(s.myTable.keff,'%.5f') % Report to Requested Accuracy
+
+numRows = height(dataTable);
+fuelSizes = [];
+keffs = [];
+for j = 1:numRows
+    fuelSize = dataTable.fuelSize(j);
+    modThick = dataTable.modThick(j);
+    size = dataTable.size(j);
+    keff = dataTable.keff(j);
+    if modThick == 0
+        fuelSizes = [fuelSizes, fuelSize];
+        keffs = [keffs, keff];
+    end
+end
+
+% ------------------------------------------------------------------------------
