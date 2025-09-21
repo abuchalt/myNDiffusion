@@ -18,6 +18,11 @@ H2O = readtable(fullfile(myCWD,'data\\2Group_H2O.csv'));
 % Cell Array of Materials
 M = {UO2, H2O};
 
+% Physical params
+totPwr = 3000; % Total Core Power [MW_{th}]
+fuelLength = 400; % Total Average Fuel Rod Length [cm]
+totLinPwr = 1E6*totPwr/fuelLength; % Total Linear Heat Generation [W/cm]
+
 %% Computational Parameters
 % ------------------------------------------------------------------------------
 G = 2; % Number of energy groups
@@ -51,8 +56,8 @@ end
 % ------------------------------------------------------------------------------
 
 % Define physical domain
-size = 100; % Domain Size [cm]
-maxNodes = i_max*2 - 1; % Fuel Dimensions [Deltax] or [number of nodes]
+size = 80; % Domain Size [cm]
+maxNodes = i_max*2 - 1; % Total number of nodes in domain
 fuelDim = maxNodes; % Fuel Dimensions [Deltax] or [number of nodes]
 modDim = ceil((maxNodes-fuelDim)/2);
 
@@ -394,13 +399,17 @@ for mygroup = 1:G
 end
 phiPlotOrganized = phiPlotOrganized/(sum(phiPlotOrganized,'all')*Deltax*Deltay); % Renormalize by true area under the surface
 
+% Physical Units
+phiPlotOrganized = phiPlotOrganized*totLinPwr; % Normalize to units of [W/cc]
+
 for mygroup = 1:G
     figure(mygroup);
     % Plot flux surface
     phiPlot = reshape(phiPlotOrganized(mygroup, :, :), i_max*2 - 1, j_max*2 - 1);
     surf(fullx,fully,phiPlot);
-    ylabel('y');
-    xlabel('x');
+    ylabel('y [cm]');
+    xlabel('x [cm]');
+    zlabel('Volumetric Heat Rate [W/cc]')
     title(['Group ',num2str(mygroup),' Flux Surface']);
 end
 
@@ -413,21 +422,48 @@ fprintf(1,'keff = %f\n',keff);
 fuelSize = fuelDim*Deltax; 
 modThick = modDim*Deltax;
 
+% Ensure we have outpit directories
+plotsfolder = [num2str(fuelDim),'_',num2str(modDim),'_',num2str(size)];
+plotOut = fullfile(myCWD,subfolder,plotsfolder);
+mkdir(plotOut)
+resultmat = 'myTable.mat';
+resultOut = fullfile(myCWD,subfolder,resultmat);
+
+newData = table(fuelSize, modThick, size, keff,'VariableNames', {'fuelSize', 'modThick', 'size', 'keff'});
+
+if exist(resultOut, 'file') == 2
+    % Load the existing table
+    existingTable = load(resultOut);
+    
+    % Assuming the table is stored in a variable within the .mat file with the same name as the file
+    % Adjust this if your table variable name is different
+    existingTableVarName = genvarname(strrep(resultOut, '.mat', ''));
+    
+    % Append the new data
+    myTable = [existingTable.myTable; newData];
+    
+    % Save the updated table back to the file
+    save(resultOut, 'myTable'); % Save the updated table under a new name or overwrite
+else
+    % If the table file does not exist, create a new one
+    myTable = newData;
+    save(resultOut, 'myTable');
+end
+
 fprintf(1, 'Slab Dimension: %f cm\n', fuelSize);
 fprintf(1, 'Moderator Thickness: %f cm\n', modThick);
 
 % Save Plots for Each Energy Group
 for mygroup = 1:G
-    saveas(figure(mygroup),fullfile(myCWD,subfolder,['G',num2str(mygroup),'FluxContour.jpg']));
+    saveas(figure(mygroup),fullfile(plotOut,['G',num2str(mygroup),'FluxContour.jpg']));
 end
 
 % And Solution Matrix
-save(fullfile(myCWD,subfolder,'phiPlot.mat'), 'phiPlotOrganized');
-save(fullfile(myCWD,subfolder,'keff.mat'), 'keff');
+save(fullfile(plotOut,'phiPlot.mat'), 'phiPlotOrganized');
 
 % And Timing Info
 tAvg = tTot/iter;
-fid = fopen(fullfile(myCWD,subfolder,'time.txt'),'wt');
+fid = fopen(fullfile(plotOut,'time.txt'),'wt');
 fprintf(fid, 'Total CPU-time: %s s\nAverage Time per Iteration: %s s\n', string(tTot), string(tAvg));
 fclose(fid);
 
