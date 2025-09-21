@@ -73,9 +73,6 @@ if Deltax > L
     fprintf('Warning: Grid Resolution is Larger than Diffusion Length')
 end
 
-% Redimensionalize the fuel for data output
-fuelSize = fuelDim*Deltax;
-
 % Define x and y values in spatial domain (fully dimensional)
 for i = 1:i_max
     for j = 1:j_max
@@ -412,6 +409,7 @@ fprintf(1,'keff = %f\n',keff);
 %% Store Results
 % ------------------------------------------------------------------------------
 
+% Redimensionalize for data output
 fuelSize = fuelDim*Deltax; 
 modThick = modDim*Deltax;
 
