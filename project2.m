@@ -57,9 +57,9 @@ end
 % ------------------------------------------------------------------------------
 
 % Define physical domain
-size = 82; % Domain Size [cm]
+size = 125; % Domain Size [cm]
 maxNodes = i_max*2 - 1; % Total number of nodes in domain
-fuelDim = maxNodes; % Fuel Dimensions [Deltax] or [number of nodes]
+fuelDim = 58; % Fuel Dimensions [Deltax] or [number of nodes]
 modDim = ceil((maxNodes-fuelDim)/2);
 
 % Unitless Constants
