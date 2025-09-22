@@ -28,8 +28,9 @@ totLinPwr = 1E6*totPwr/fuelLength; % Total Linear Heat Generation [W/cm]
 G = 2; % Number of energy groups
 
 % Define mesh size
-fprintf('Quarter-mesh size') % separate print and input b/c vscode extension
-i_max = input('');
+% fprintf('Quarter-mesh size') % separate print and input b/c vscode extension
+% i_max = input('');
+i_max = 65;
 j_max = i_max;
 
 % Define variables for power-iteration
@@ -56,7 +57,7 @@ end
 % ------------------------------------------------------------------------------
 
 % Define physical domain
-size = 85; % Domain Size [cm]
+size = 82; % Domain Size [cm]
 maxNodes = i_max*2 - 1; % Total number of nodes in domain
 fuelDim = maxNodes; % Fuel Dimensions [Deltax] or [number of nodes]
 modDim = ceil((maxNodes-fuelDim)/2);

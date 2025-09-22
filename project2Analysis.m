@@ -52,7 +52,7 @@ for i = 1:meshes
     for j = 1:numRows
         fuelSize = dataTable.fuelSize(j);
         modThick = dataTable.modThick(j);
-        size = dataTable.size(j);
+        % size = dataTable.size(j);
         keff = dataTable.keff(j);
         if modThick == 0
             fuelSizes = [fuelSizes, fuelSize];
@@ -144,22 +144,76 @@ resultOut = fullfile(myCWD,subfolder,resultmat);
 
 s = load(resultOut);
 dataTable = s.myTable;
-dataTable = sortrows(dataTable, 'keff');
+dataTable = sortrows(dataTable, 'fuelSize');
 
 % num2str(s.myTable.keff,'%.5f') % Report to Requested Accuracy
 
 numRows = height(dataTable);
 fuelSizes = [];
+modThicks = [];
 keffs = [];
-for j = 1:numRows
-    fuelSize = dataTable.fuelSize(j);
-    modThick = dataTable.modThick(j);
-    size = dataTable.size(j);
-    keff = dataTable.keff(j);
-    if modThick == 0
-        fuelSizes = [fuelSizes, fuelSize];
-        keffs = [keffs, keff];
+for i = 1:numRows
+    fuelSize = dataTable.fuelSize(i);
+    modThick = dataTable.modThick(i);
+    % size = dataTable.size(i);
+    keff = dataTable.keff(i);
+
+    fuelSizes = [fuelSizes, fuelSize];
+    modThicks = [modThicks, modThick];
+    keffs = [keffs, keff];
+end
+
+myOrder = 3;
+
+figure(10);
+% Plot reflector optimization surface
+scatter3(fuelSizes,modThicks,keffs);
+hold on;
+p = polyfitn([fuelSizes(:), modThicks(:)],keffs,myOrder);
+myX = linspace(min(fuelSizes), max(fuelSizes));
+myY = linspace(min(modThicks), max(modThicks));
+[xg, yg] = meshgrid(myX,myY);
+zg = polyvaln(p,[xg(:),yg(:)]);
+surf(xg,yg,reshape(zg,size(xg)));
+hold off;
+ylabel('Moderator Thickness [cm]','interpreter','latex');
+xlabel('Fuel Slab Dimension [cm]','interpreter','latex');
+zlabel('Predicted Neutron Multiplication Factor $k_{eff}$','interpreter','latex')
+title('Optimization of Reflector Savings');
+filename = 'modelTraining.jpg';
+saveas(figure(10),fullfile(myCWD,resFolder,filename));
+
+% Find intersection with keff=1 plane
+syms X1 X2
+expression = polyn2sym(p);
+eqn = expression == 1;
+myModeratorVals = [];
+myFuelVals = [];
+for i = 1:length(myY)
+    thisY = myY(i);
+    eqn1 = subs(eqn, X2, thisY);
+    sol_expr = solve(eqn1, X1);
+    for j = 1:length(sol_expr)
+        thisRoot = double(sol_expr(j));
+        if isreal(thisRoot) && thisRoot <= max(fuelSizes) && thisRoot >= min(fuelSizes)
+            myFuelVals = [myFuelVals, real(thisRoot)];
+            myModeratorVals = [myModeratorVals, thisY];
+        end
     end
 end
+
+figure(11);
+plot(myModeratorVals, myFuelVals);
+hold on;
+[min_value, min_index] = min(myFuelVals);
+minX = myModeratorVals(min_index);
+xl = xline(minX,'--',['Optimal Thickness: ',num2str(minX,'%.2f'),' cm'],'interpreter','latex');
+xl.Color = [0 0 .90];
+hold off;
+xlabel('Moderator Thickness [cm]','interpreter','latex');
+ylabel('Fuel Slab Dimension [cm]','interpreter','latex');
+title('Reflector Savings in a Critical System','interpreter','latex');
+filename = 'reflectorSavings.jpg';
+saveas(figure(11),fullfile(myCWD,resFolder,filename));
 
 % ------------------------------------------------------------------------------
