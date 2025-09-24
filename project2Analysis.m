@@ -345,3 +345,64 @@ filename = 'centerlineFluxSlab.jpg';
 saveas(figure(13),fullfile(myCWD,resFolder,filename));
 
 % ------------------------------------------------------------------------------
+
+%% 4 Group Moderated Core
+fprintf('\n')
+
+% Select Specs
+G = 4;
+N = 129;
+size = 125;
+fuelDim = 58;
+modDim = ceil((N-fuelDim)/2);
+
+% File Management
+subfolder = 'results\\project2\\'+string(N)+'x'+string(N)+'_4G';
+plotsfolder = [num2str(fuelDim),'_',num2str(modDim),'_',num2str(size)];
+fprintf(['Looking at ',plotsfolder,' (4 Group):\n'])
+
+plotOut = fullfile(myCWD,subfolder,plotsfolder);
+resultmat = 'myTable.mat';
+resultOut = fullfile(myCWD,subfolder,resultmat);
+
+s = load(resultOut);
+dataTable = s.myTable;
+
+% Back-Calculate
+Deltax = size/N;
+fuelSize = fuelDim*Deltax; 
+modThick = modDim*Deltax;
+
+% Search
+tableidx = dataTable.fuelSize == fuelSize & dataTable.modThick == modThick;
+matching_rows_combined = dataTable(tableidx, :);
+
+fprintf('Near-Optimal Assembly k_eff: %.5f\n', matching_rows_combined.keff);
+fprintf('Fuel Slab Dimension: %.2f cm\n', matching_rows_combined.fuelSize);
+fprintf('Moderator Thickness: %.2f cm\n', matching_rows_combined.modThick);
+% fprintf('size: %.5f\n', matching_rows_combined.size);
+
+% Gather and Plot Fluxes
+figure(12);
+myres = load(fullfile(plotOut,'phiPlot.mat'));
+phiPlotOrganized = myres.phiPlotOrganized;
+midline = (N+1)/2;
+for i = 1:N
+    fullx(i) = Deltax*(i-1);
+end
+for mygroup = 1:G
+    phiPlot = phiPlotOrganized(mygroup, :, midline);
+    plot(fullx, phiPlot, 'DisplayName', ['Group ',num2str(mygroup)]);
+    hold on;
+end
+xl = xline(matching_rows_combined.modThick,'--', 'HandleVisibility', 'off');
+hold on;
+xl2 = xline(max(fullx) - matching_rows_combined.modThick,'--', 'HandleVisibility', 'off');
+hold off;
+legend;
+ylabel('Power Density [W/cc]','interpreter','latex');
+xlabel('x-Axis Distance [cm]','interpreter','latex');
+title('Multigroup Centerline Flux Profiles','interpreter','latex');
+xlim([0 max(fullx)])
+filename = 'centerlineFlux4G.jpg';
+saveas(figure(12),fullfile(myCWD,resFolder,filename));

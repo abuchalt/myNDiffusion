@@ -11,9 +11,11 @@ clear all; close all; clc;
 %% Import Data
 % ------------------------------------------------------------------------------
 myCWD = pwd;
-UO2 = readtable(fullfile(myCWD,'data\\2Group_UO2.csv'));
-H2O = readtable(fullfile(myCWD,'data\\2Group_H2O.csv'));
+% UO2 = readtable(fullfile(myCWD,'data\\2Group_PWR.csv'));
+% H2O = readtable(fullfile(myCWD,'data\\2Group_H2O.csv'));
 % MOX = readtable(fullfile(myCWD,'data\\2Group_MOX.csv'));
+UO2 = readtable(fullfile(myCWD,'data\\4Group_10.1GWD_UO2.csv'));
+H2O = readtable(fullfile(myCWD,'data\\4Group_H2O.csv'));
 
 % Cell Array of Materials
 M = {UO2, H2O};
@@ -25,7 +27,8 @@ totLinPwr = 1E6*totPwr/fuelLength; % Total Linear Heat Generation [W/cm]
 
 %% Computational Parameters
 % ------------------------------------------------------------------------------
-G = 2; % Number of energy groups
+% G = 2; % Number of energy groups
+G = 4;
 
 % Define mesh size
 % fprintf('Quarter-mesh size') % separate print and input b/c vscode extension
@@ -118,14 +121,15 @@ end
 % matref2Plot = vertcat(matref2, matref1Plot);
 
 % File Info
-subfolder='results\\project2\\'+string((2*i_max)-1)+'x'+string((2*i_max)-1);
+% subfolder='results\\project2\\'+string((2*i_max)-1)+'x'+string((2*i_max)-1);
+subfolder='results\\project2\\'+string((2*i_max)-1)+'x'+string((2*i_max)-1)+'_4G';
 mkdir(fullfile(myCWD,subfolder));
 
 %% Build Coefficient Matrices
 % ------------------------------------------------------------------------------
 % Init coeff matrices
-H = spalloc(G*i_max*j_max, G*i_max*j_max, 5*i_max*j_max); % Sparsely allocate Streaming/Absorption Operator with 5 bands
-S = spalloc(G*i_max*j_max, G*i_max*j_max, G*(G-1)*i_max*j_max); % Sparsely allocate Scattering Source Operator with bands for up/downscatter
+H = spalloc(G*i_max*j_max, G*i_max*j_max, 5*G*i_max*j_max); % Sparsely allocate Streaming/Absorption Operator with 5 bands for each energy group
+S = spalloc(G*i_max*j_max, G*i_max*j_max, floor((G*(G-1))/2)*i_max*j_max); % Sparsely allocate Scattering Source Operator with bands for up/downscatter
 F = spalloc(G*i_max*j_max, G*i_max*j_max, 1*G*i_max*j_max); % Sparsely allocate Fission Source Operator with 1 band for each energy group
 
 % Init Solution Variables (1D because we use pointer mapping)
@@ -327,7 +331,9 @@ end
 % ------------------------------------------------------------------------------
 % Compute evolution operator initially to minimize work in loop
 % Amat = inv(H-S)*F % Slowww
-Amat = (H-S)\F;
+% Amat = (H-S)\F; % Memory-Intensive
+Amat = (H-S)\F; % Enforce Memory Clearing (since MATLAB is weird about it)
+clearvars H S F
 
 % Init iteration vars
 tTot = 0;
@@ -354,7 +360,6 @@ while (residual > epsilon)
     % Compute the new residual
     residual = norm(phi-phi_old);
     residual = residual/(i_max*j_max); % Normalize for DOF
-
 
     % Plot solution
     if mod(iter,10) == 0
