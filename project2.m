@@ -128,7 +128,7 @@ mkdir(fullfile(myCWD,subfolder));
 % ------------------------------------------------------------------------------
 % Init coeff matrices
 H = spalloc(G*i_max*j_max, G*i_max*j_max, 5*G*i_max*j_max); % Sparsely allocate Streaming/Absorption Operator with 5 bands for each energy group
-S = spalloc(G*i_max*j_max, G*i_max*j_max, floor((G*(G-1))/2)*i_max*j_max); % Sparsely allocate Scattering Source Operator with bands for up/downscatter
+S = spalloc(G*i_max*j_max, G*i_max*j_max, (G-1)*i_max*j_max); % Sparsely allocate Scattering Source Operator with bands for up/downscatter
 F = spalloc(G*i_max*j_max, G*i_max*j_max, 1*G*i_max*j_max); % Sparsely allocate Fission Source Operator with 1 band for each energy group
 
 % Init Solution Variables (1D because we use pointer mapping)
