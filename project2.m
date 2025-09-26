@@ -1,4 +1,4 @@
-%% 2D Cartesian 2-Group Neutron Diffusion
+%% 2D Cartesian G-Group Neutron Diffusion
 % ------------------------------------------------------------------------------
 % Adam Buchalter
 %

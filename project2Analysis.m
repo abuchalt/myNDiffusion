@@ -1,10 +1,11 @@
-%% Project 1 Analysis
+%% Project 2 Analysis
 % ------------------------------------------------------------------------------
 % Adam Buchalter
 %
 % This is a script for:
 % - Estimating and visualizing convergence of truncation error for the 2-D
 %   cartesian slab multigroup neutron transport problem
+% - Training a reflector optimization model
 % - Visualizing flux line profiles
 % ------------------------------------------------------------------------------
 clear all; close all; clc;
