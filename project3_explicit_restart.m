@@ -12,7 +12,7 @@
 % Bulk Convective Fluid Temperature
 T_infty = 18; % def 20 [K]
 % Convective Heat Transfer Coefficient
-thish = 0.1; % def 0.1 [W/m^2.K]
+thish = 0.1; % def 0.1 [W/cm^2.K]
 
 %% Nondimensional Domain Prep
 % ------------------------------------------------------------------------------

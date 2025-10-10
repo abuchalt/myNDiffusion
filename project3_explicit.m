@@ -111,7 +111,7 @@ end
 %     end
 % end
 
-% Specify Internal Volumetric Heat Generation [W/m^3]
+% Specify Internal Volumetric Heat Generation [W/cm^3]
 q3prime = ones(i_max*j_max,1); % Uniform heating as in examples
 
 % File Info
