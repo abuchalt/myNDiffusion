@@ -115,7 +115,7 @@ end
 q3prime = ones(i_max*j_max,1); % Uniform heating as in examples
 
 % File Info
-subfolder='results\\project3\\'+string((2*i_max)-1)+'x'+string((2*i_max)-1);
+subfolder='results\\project3exp\\'+string((2*i_max)-1)+'x'+string((2*i_max)-1);
 % subfolder='results\\project2\\'+string((2*i_max)-1)+'x'+string((2*i_max)-1)+'_4G';
 mkdir(fullfile(myCWD,subfolder));
 
@@ -442,10 +442,6 @@ title('Steady-State Solution for a Uniformly Heated Slab');
 
 %% Store Results
 % ------------------------------------------------------------------------------
-
-% subfolder='results\\project3\\'+string((2*i_max)-1)+'x'+string((2*i_max)-1);
-% mkdir(fullfile(myCWD,subfolder));
-
 subsubfolder = [num2str(Deltat),'dt_',num2str(size),'cm'];
 plotOut = fullfile(myCWD,subfolder,subsubfolder);
 mkdir(plotOut)

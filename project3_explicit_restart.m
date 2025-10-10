@@ -365,9 +365,6 @@ title('Peak Temperature Transient');
 %% Store Results
 % ------------------------------------------------------------------------------
 
-% subfolder='results\\project3\\'+string((2*i_max)-1)+'x'+string((2*i_max)-1);
-% mkdir(fullfile(myCWD,subfolder));
-
 subsubsubfolder = [num2str(T_infty),'T_',num2str(thish),'h'];
 newDest = fullfile(plotOut,subsubsubfolder);
 mkdir(newDest)
