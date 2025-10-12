@@ -1,4 +1,4 @@
-%% 2D Cartesian Heat Diffusion (EXPLICIT) (Restart)
+%% 2D Cartesian Heat Diffusion (EXPLICIT)
 % ------------------------------------------------------------------------------
 % Adam Buchalter
 %
@@ -6,40 +6,120 @@
 % cartesian slab geometry using a cell-centered finite-volume discretization 
 % scheme and Newton (convective) boundary conditions.
 % ------------------------------------------------------------------------------
+clear all; close all; clc;
 
-%% Modify Computational Parameters
+%% Import Data
+% ------------------------------------------------------------------------------
+myCWD = pwd;
+% UO2 = readtable(fullfile(myCWD,'thermalData\\UO2.csv'));
+% H2O = readtable(fullfile(myCWD,'thermalData\\H2O.csv'));
+myMat = readtable(fullfile(myCWD,'thermalData\\example.csv')); % Example Thermal Properties
+
+% Cell Array of Materials
+% M = {UO2, H2O};
+M = {myMat};
+
+% Physical params
+% totPwr = 3000; % Total Core Power [MW_{th}]
+% fuelLength = 400; % Total Average Fuel Rod Length [cm]
+% totLinPwr = 1E6*totPwr/fuelLength; % Total Linear Heat Generation [W/cm]
+
+%% Computational Parameters
 % ------------------------------------------------------------------------------
 % Bulk Convective Fluid Temperature
-T_infty = 18; % def 20 [K]
-% Convective Heat Transfer Coefficient
-thish = 0.1; % def 0.1 [W/cm^2.K]
+T_infty = 20; % [K]
+
+% Define mesh size
+% fprintf('Quarter-mesh size') % separate print and input b/c vscode extension
+% i_max = input('');
+i_max = 9;
+j_max = i_max;
+
+% Define time stepping
+Deltat = 0.1; % [s]
 
 %% Nondimensional Domain Prep
 % ------------------------------------------------------------------------------
 
-% VERIFY FOURIER NUMBER
-Fo = 0; % Arbitrarily Small Initial Guess
-for thisMat = 1:numel(M) % For each material
-    thisk = M{thisMat}.k;
-    thisrhoc_p = M{thisMat}.rhoc_p;
+% Define physical domain
+size = 12.5; % Domain Size [cm]
+maxNodes = i_max*2 - 1; % Total number of nodes in domain
+fuelDim = maxNodes; % Fuel Dimensions [Deltax] or [number of nodes]
+modDim = ceil((maxNodes-fuelDim)/2);
 
-    thisFo = thisk*Deltat/(thisrhoc_p*Deltax^2);
+% Unitless Constants
+T_r = T_infty; % [K]
+
+% Calculate step sizes
+Deltax = size/(i_max*2 - 1);
+Deltay = Deltax;
+% Deltaxbar = sizebar/(i_max*2 - 1);
+% Deltaybar = Deltaxbar;
+
+% VERIFY FOURIER NUMBER
+% Fo = 0; % Arbitrarily Small Initial Guess
+% for thisMat = 1:numel(M) % For each material
+%     thisk = M{thisMat}.k;
+%     thisrhoc_p = M{thisMat}.rhoc_p;
+%     thish = M{thisMat}.h;
+
+%     thisFo = thisk*Deltat/(thisrhoc_p*Deltax^2);
     
-    if thisFo > Fo % If larger, use as new fourier number
-        Fo = thisFo;
+%     if thisFo > Fo % If larger, use as new fourier number
+%         Fo = thisFo;
+%     end
+% end
+% fprintf(1,'Fo = %f\n',Fo);
+
+% Define x and y values in spatial domain (fully dimensional)
+for i = 1:i_max
+    for j = 1:j_max
+        x(i,j) = Deltax*(i-1);
+        y(i,j) = Deltay*(j-1);
     end
 end
-fprintf(1,'Fo = %f\n',Fo);
-if Fo > 0.5
-    fprintf('Numerical Stability Warning: Fourier Number Exceeds 0.5');
-    pause();
+
+% Define x and y values in complete spatial domain
+for i = 1:(2*i_max)-1
+    for j = 1:(2*j_max)-1
+        fullx(i,j) = Deltax*(i-1);
+        fully(i,j) = Deltay*(j-1);
+    end
 end
+
+% Specify materials in domain
+for i = 1:i_max
+    for j = 1:j_max
+        k = pmap(i, j, i_max);
+        mat(k) = 1; % Only One Material
+    end
+end
+
+% quarterFuelDim = (fuelDim+1)/2;
+% for i = 1:i_max
+%     for j = 1:j_max
+%         k = pmap(i, j, i_max);
+%         if i <= quarterFuelDim && j_max-j+1 <= quarterFuelDim % because of reflection mapping j is flipped
+%             mat(k) = 1; % fuel
+%         else
+%             mat(k) = 2; % moderator
+%         end
+%     end
+% end
+
+% Specify Internal Volumetric Heat Generation [W/cm^3]
+q3prime = ones(i_max*j_max,1); % Uniform heating as in examples
+
+% File Info
+subfolder='results\\project3imp\\'+string((2*i_max)-1)+'x'+string((2*i_max)-1);
+% subfolder='results\\project2\\'+string((2*i_max)-1)+'x'+string((2*i_max)-1)+'_4G';
+mkdir(fullfile(myCWD,subfolder));
 
 %% Build Coefficient Matrices
 % ------------------------------------------------------------------------------
-% RE-Init coeff matrices
+% Init coeff matrices
 A = spalloc(i_max*j_max, i_max*j_max, 5*i_max*j_max); % Sparsely allocate Diffusion Operator with 5 bands
-Q = zeros(i_max*j_max, 1); % Allocate Heat Generation Vector
+Q = zeros(i_max*j_max, 1); % Allocate Heat Source Vector
 
 % Define Coefficient Matrix
 for i = 2:i_max-1
@@ -61,11 +141,11 @@ for i = 2:i_max-1
         nonDimFactorx = Deltat/(2.0*thisrhoc_p*Deltax^2);
         nonDimFactory = Deltat/(2.0*thisrhoc_p*Deltay^2);
         % pointer mapping goes row-by-row to assemble Coeff. Matrix
-        A(k,k) = 1.0 - (nonDimFactorx*(thisk_ke+2.0*thisk_k+thisk_kw)) - (nonDimFactory*(thisk_kn+2.0*thisk_k+thisk_ks));
-        A(k,k_e) = nonDimFactorx*(thisk_ke+thisk_k);
-        A(k,k_w) = nonDimFactorx*(thisk_kw+thisk_k);
-        A(k,k_n) = nonDimFactory*(thisk_kn+thisk_k);
-        A(k,k_s) = nonDimFactory*(thisk_ks+thisk_k);
+        A(k,k) = 1.0 + (nonDimFactorx*(thisk_ke+2.0*thisk_k+thisk_kw)) + (nonDimFactory*(thisk_kn+2.0*thisk_k+thisk_ks));
+        A(k,k_e) = -nonDimFactorx*(thisk_ke+thisk_k);
+        A(k,k_w) = -nonDimFactorx*(thisk_kw+thisk_k);
+        A(k,k_n) = -nonDimFactory*(thisk_kn+thisk_k);
+        A(k,k_s) = -nonDimFactory*(thisk_ks+thisk_k);
         %
         Q(k) = (Deltat/(thisrhoc_p*T_r))*q3prime(k);
     end
@@ -94,11 +174,11 @@ for i = 1:1
         nonDimFactorx = Deltat/(2.0*thisrhoc_p*Deltax^2);
         nonDimFactory = Deltat/(2.0*thisrhoc_p*Deltay^2);
         % pointer mapping goes row-by-row to assemble Coeff. Matrix
-        A(k,k) = 1.0 - (nonDimFactorx*(thisk_ke+2.0*thisk_k+thisk_kw)) - (nonDimFactory*(thisk_kn+2.0*thisk_k+thisk_ks));
-        A(k,k_e) = A(k,k_e) + nonDimFactorx*(thisk_ke+thisk_k);
-        A(k,k_w) = A(k,k_w) + nonDimFactorx*(thisk_kw+thisk_k);
-        A(k,k_n) = A(k,k_n) + nonDimFactory*(thisk_kn+thisk_k);
-        A(k,k_s) = A(k,k_s) + nonDimFactory*(thisk_ks+thisk_k);
+        A(k,k) = 1.0 + (nonDimFactorx*(thisk_ke+2.0*thisk_k+thisk_kw)) + (nonDimFactory*(thisk_kn+2.0*thisk_k+thisk_ks));
+        A(k,k_e) = A(k,k_e) - nonDimFactorx*(thisk_ke+thisk_k);
+        A(k,k_w) = A(k,k_w) - nonDimFactorx*(thisk_kw+thisk_k);
+        A(k,k_n) = A(k,k_n) - nonDimFactory*(thisk_kn+thisk_k);
+        A(k,k_s) = A(k,k_s) - nonDimFactory*(thisk_ks+thisk_k);
         %
         Q(k) = (Deltat/(thisrhoc_p*T_r))*q3prime(k);
     end
@@ -112,7 +192,7 @@ for i = i_max:i_max
         k_s = k - i_max;
         
         thisk_k = M{mat(k)}.k;
-        thish_ke = thish; % In complete solver, pull in h from the east
+        thish_ke = M{1}.h; % In complete solver, pull in h from the east
         thisk_kw = M{mat(k_w)}.k;
         thisk_kn = M{mat(k_n)}.k;
         thisk_ks = M{mat(k_s)}.k;
@@ -121,10 +201,10 @@ for i = i_max:i_max
         nonDimFactorx = Deltat/(2.0*thisrhoc_p*Deltax^2);
         nonDimFactory = Deltat/(2.0*thisrhoc_p*Deltay^2);
         % pointer mapping goes row-by-row to assemble Coeff. Matrix
-        A(k,k) = 1.0 - (nonDimFactorx*(2.0*thish_ke*Deltax+thisk_k+thisk_kw)) - (nonDimFactory*(thisk_kn+2.0*thisk_k+thisk_ks));
-        A(k,k_w) = A(k,k_w) + nonDimFactorx*(thisk_kw+thisk_k);
-        A(k,k_n) = A(k,k_n) + nonDimFactory*(thisk_kn+thisk_k);
-        A(k,k_s) = A(k,k_s) + nonDimFactory*(thisk_ks+thisk_k);
+        A(k,k) = 1.0 + (nonDimFactorx*(2.0*thish_ke*Deltax+thisk_k+thisk_kw)) + (nonDimFactory*(thisk_kn+2.0*thisk_k+thisk_ks));
+        A(k,k_w) = A(k,k_w) - nonDimFactorx*(thisk_kw+thisk_k);
+        A(k,k_n) = A(k,k_n) - nonDimFactory*(thisk_kn+thisk_k);
+        A(k,k_s) = A(k,k_s) - nonDimFactory*(thisk_ks+thisk_k);
         %
         Q(k) = (Deltat/(thisrhoc_p*T_r))*q3prime(k) + (thish_ke*Deltat*T_infty/(thisrhoc_p*Deltax*T_r));
     end
@@ -141,16 +221,16 @@ for i = 2:i_max-1 % Avoid Corners
         thisk_ke = M{mat(k_e)}.k;
         thisk_kw = M{mat(k_w)}.k;
         thisk_kn = M{mat(k_n)}.k;
-        thish_ks = thish; % In complete solver, pull in h from the south
+        thish_ks = M{1}.h; % In complete solver, pull in h from the south
         thisrhoc_p = M{mat(k)}.rhoc_p;
 
         nonDimFactorx = Deltat/(2.0*thisrhoc_p*Deltax^2);
         nonDimFactory = Deltat/(2.0*thisrhoc_p*Deltay^2);
         % pointer mapping goes row-by-row to assemble Coeff. Matrix
-        A(k,k) = 1.0 - (nonDimFactorx*(thisk_ke+2.0*thisk_k+thisk_kw)) - (nonDimFactory*(thisk_kn+thisk_k+2.0*thish_ks*Deltay));
-        A(k,k_e) = A(k,k_e) + nonDimFactorx*(thisk_ke+thisk_k);
-        A(k,k_w) = A(k,k_w) + nonDimFactorx*(thisk_kw+thisk_k);
-        A(k,k_n) = A(k,k_n) + nonDimFactory*(thisk_kn+thisk_k);
+        A(k,k) = 1.0 + (nonDimFactorx*(thisk_ke+2.0*thisk_k+thisk_kw)) + (nonDimFactory*(thisk_kn+thisk_k+2.0*thish_ks*Deltay));
+        A(k,k_e) = A(k,k_e) - nonDimFactorx*(thisk_ke+thisk_k);
+        A(k,k_w) = A(k,k_w) - nonDimFactorx*(thisk_kw+thisk_k);
+        A(k,k_n) = A(k,k_n) - nonDimFactory*(thisk_kn+thisk_k);
         %
         Q(k) = (Deltat/(thisrhoc_p*T_r))*q3prime(k) + (thish_ks*Deltat*T_infty/(thisrhoc_p*Deltay*T_r));
     end
@@ -176,11 +256,11 @@ for i = 2:i_max-1 % Avoid corners
         nonDimFactorx = Deltat/(2.0*thisrhoc_p*Deltax^2);
         nonDimFactory = Deltat/(2.0*thisrhoc_p*Deltay^2);
         % pointer mapping goes row-by-row to assemble Coeff. Matrix
-        A(k,k) = 1.0 - (nonDimFactorx*(thisk_ke+2.0*thisk_k+thisk_kw)) - (nonDimFactory*(thisk_kn+2.0*thisk_k+thisk_ks));
-        A(k,k_e) = A(k,k_e) + nonDimFactorx*(thisk_ke+thisk_k);
-        A(k,k_w) = A(k,k_w) + nonDimFactorx*(thisk_kw+thisk_k);
-        A(k,k_n) = A(k,k_n) + nonDimFactory*(thisk_kn+thisk_k);
-        A(k,k_s) = A(k,k_s) + nonDimFactory*(thisk_ks+thisk_k);
+        A(k,k) = 1.0 + (nonDimFactorx*(thisk_ke+2.0*thisk_k+thisk_kw)) + (nonDimFactory*(thisk_kn+2.0*thisk_k+thisk_ks));
+        A(k,k_e) = A(k,k_e) - nonDimFactorx*(thisk_ke+thisk_k);
+        A(k,k_w) = A(k,k_w) - nonDimFactorx*(thisk_kw+thisk_k);
+        A(k,k_n) = A(k,k_n) - nonDimFactory*(thisk_kn+thisk_k);
+        A(k,k_s) = A(k,k_s) - nonDimFactory*(thisk_ks+thisk_k);
         %
         Q(k) = (Deltat/(thisrhoc_p*T_r))*q3prime(k);
     end
@@ -206,11 +286,11 @@ thisrhoc_p = M{mat(k)}.rhoc_p;
 nonDimFactorx = Deltat/(2.0*thisrhoc_p*Deltax^2);
 nonDimFactory = Deltat/(2.0*thisrhoc_p*Deltay^2);
 % pointer mapping goes row-by-row to assemble Coeff. Matrix
-A(k,k) = 1.0 - (nonDimFactorx*(thisk_ke+2.0*thisk_k+thisk_kw)) - (nonDimFactory*(thisk_kn+2.0*thisk_k+thisk_ks));
-A(k,k_e) = A(k,k_e) + nonDimFactorx*(thisk_ke+thisk_k);
-A(k,k_s) = A(k,k_s) + nonDimFactory*(thisk_ks+thisk_k);
-A(k,k_n) = A(k,k_n) + nonDimFactory*(thisk_kn+thisk_k);
-A(k,k_w) = A(k,k_w) + nonDimFactorx*(thisk_kw+thisk_k);
+A(k,k) = 1.0 + (nonDimFactorx*(thisk_ke+2.0*thisk_k+thisk_kw)) + (nonDimFactory*(thisk_kn+2.0*thisk_k+thisk_ks));
+A(k,k_e) = A(k,k_e) - nonDimFactorx*(thisk_ke+thisk_k);
+A(k,k_s) = A(k,k_s) - nonDimFactory*(thisk_ks+thisk_k);
+A(k,k_n) = A(k,k_n) - nonDimFactory*(thisk_kn+thisk_k);
+A(k,k_w) = A(k,k_w) - nonDimFactorx*(thisk_kw+thisk_k);
 %
 Q(k) = (Deltat/(thisrhoc_p*T_r))*q3prime(k);
 
@@ -222,18 +302,18 @@ k_w = k - 1;
 k_n = k + i_max;
 % APPLY DOUBLE NEWTON BC 
 thisk_k = M{mat(k)}.k;
-thish_ke = thish; % In complete solver, pull in h from the east
+thish_ke = M{1}.h; % In complete solver, pull in h from the east
 thisk_kw = M{mat(k_w)}.k;
 thisk_kn = M{mat(k_n)}.k;
-thish_ks = thish; % In complete solver, pull in h from the south
+thish_ks = M{1}.h; % In complete solver, pull in h from the south
 thisrhoc_p = M{mat(k)}.rhoc_p;
 %
 nonDimFactorx = Deltat/(2.0*thisrhoc_p*Deltax^2);
 nonDimFactory = Deltat/(2.0*thisrhoc_p*Deltay^2);
 % pointer mapping goes row-by-row to assemble Coeff. Matrix
-A(k,k) = 1.0 - (nonDimFactorx*(2.0*thish_ke*Deltax+thisk_k+thisk_kw)) - (nonDimFactory*(thisk_kn+thisk_k+2.0*thish_ks*Deltay));
-A(k,k_w) = A(k,k_w) + nonDimFactorx*(thisk_kw+thisk_k);
-A(k,k_n) = A(k,k_n) + nonDimFactory*(thisk_kn+thisk_k);
+A(k,k) = 1.0 + (nonDimFactorx*(2.0*thish_ke*Deltax+thisk_k+thisk_kw)) + (nonDimFactory*(thisk_kn+thisk_k+2.0*thish_ks*Deltay));
+A(k,k_w) = A(k,k_w) - nonDimFactorx*(thisk_kw+thisk_k);
+A(k,k_n) = A(k,k_n) - nonDimFactory*(thisk_kn+thisk_k);
 %
 Q(k) = (Deltat/(thisrhoc_p*T_r))*q3prime(k) + (thish_ke*Deltat*T_infty/(thisrhoc_p*Deltax*T_r)) + (thish_ks*Deltat*T_infty/(thisrhoc_p*Deltay*T_r));
 
@@ -251,16 +331,16 @@ thisk_k = M{mat(k)}.k;
 thisk_ke = M{mat(k_e)}.k;
 thisk_kw = M{mat(k_w)}.k;
 thisk_kn = M{mat(k_n)}.k;
-thish_ks = thish; % In complete solver, pull in h from the south
+thish_ks = M{1}.h; % In complete solver, pull in h from the south
 thisrhoc_p = M{mat(k)}.rhoc_p;
 %
 nonDimFactorx = Deltat/(2.0*thisrhoc_p*Deltax^2);
 nonDimFactory = Deltat/(2.0*thisrhoc_p*Deltay^2);
 % pointer mapping goes row-by-row to assemble Coeff. Matrix
-A(k,k) = 1.0 - (nonDimFactorx*(thisk_ke+2.0*thisk_k+thisk_kw)) - (nonDimFactory*(thisk_kn+thisk_k+2.0*thish_ks*Deltay));
-A(k,k_e) = A(k,k_e) + nonDimFactorx*(thisk_ke+thisk_k);
-A(k,k_w) = A(k,k_w) + nonDimFactorx*(thisk_kw+thisk_k);
-A(k,k_n) = A(k,k_n) + nonDimFactory*(thisk_kn+thisk_k);
+A(k,k) = 1.0 + (nonDimFactorx*(thisk_ke+2.0*thisk_k+thisk_kw)) + (nonDimFactory*(thisk_kn+thisk_k+2.0*thish_ks*Deltay));
+A(k,k_e) = A(k,k_e) - nonDimFactorx*(thisk_ke+thisk_k);
+A(k,k_w) = A(k,k_w) - nonDimFactorx*(thisk_kw+thisk_k);
+A(k,k_n) = A(k,k_n) - nonDimFactory*(thisk_kn+thisk_k);
 %
 Q(k) = (Deltat/(thisrhoc_p*T_r))*q3prime(k) + (thish_ks*Deltat*T_infty/(thisrhoc_p*Deltay*T_r));
 
@@ -273,7 +353,7 @@ k_n = sympmap(i,j,i_max,j_max)+1; % kn sym
 k_s = k - i_max;
 % APPLY NEWTON BC SAME WAY AS IN RIGHT EDGE
 thisk_k = M{mat(k)}.k;
-thish_ke = thish; % In complete solver, pull in h from the east
+thish_ke = M{1}.h; % In complete solver, pull in h from the east
 thisk_kw = M{mat(k_w)}.k;
 thisk_kn = M{mat(k_n)}.k;
 thisk_ks = M{mat(k_s)}.k;
@@ -282,15 +362,20 @@ thisrhoc_p = M{mat(k)}.rhoc_p;
 nonDimFactorx = Deltat/(2.0*thisrhoc_p*Deltax^2);
 nonDimFactory = Deltat/(2.0*thisrhoc_p*Deltay^2);
 % pointer mapping goes row-by-row to assemble Coeff. Matrix
-A(k,k) = 1.0 - (nonDimFactorx*(2.0*thish_ke*Deltax+thisk_k+thisk_kw)) - (nonDimFactory*(thisk_kn+2.0*thisk_k+thisk_ks));
-A(k,k_w) = A(k,k_w) + nonDimFactorx*(thisk_kw+thisk_k);
-A(k,k_n) = A(k,k_n) + nonDimFactory*(thisk_kn+thisk_k);
-A(k,k_s) = A(k,k_s) + nonDimFactory*(thisk_ks+thisk_k);
+A(k,k) = 1.0 + (nonDimFactorx*(2.0*thish_ke*Deltax+thisk_k+thisk_kw)) + (nonDimFactory*(thisk_kn+2.0*thisk_k+thisk_ks));
+A(k,k_w) = A(k,k_w) - nonDimFactorx*(thisk_kw+thisk_k);
+A(k,k_n) = A(k,k_n) - nonDimFactory*(thisk_kn+thisk_k);
+A(k,k_s) = A(k,k_s) - nonDimFactory*(thisk_ks+thisk_k);
 %
 Q(k) = (Deltat/(thisrhoc_p*T_r))*q3prime(k) + (thish_ke*Deltat*T_infty/(thisrhoc_p*Deltax*T_r));
 
 %% Solve
 % ------------------------------------------------------------------------------
+
+% Init Solution Variables (1D because we use pointer mapping)
+T = ones(i_max*j_max,1);
+% "Old" Solution for computing residual
+T_old = ones(i_max*j_max,1);
 
 % Define variables for time-iteration
 residual = 1.0E5; % init residual
@@ -307,7 +392,7 @@ while (residual > epsilon)
     T_old = T;
 
     % Solve new guess of T
-    T = A*T + Q;
+    T = A\(T + Q);
 
     % Compute the new residual
     residual = norm(T-T_old);
@@ -329,10 +414,6 @@ while (residual > epsilon)
     myt = myt + Deltat; % Update time (s)
     p = p + 1;
 
-    % Save Time-Dep Solution
-    peakT(p) = T_r*max(T);
-    timeVec(p) = myt;
-
     fprintf(1,'iter = %i, residual = %g\n',p,log10(residual));
 end
 
@@ -353,34 +434,23 @@ surf(fullx,fully,Tref2Plot);
 ylabel('y [cm]');
 xlabel('x [cm]');
 zlabel('Temperature [K]')
-title('Steady-State Solution After Perturbation');
-
-figure(2);
-% Plot time-dependent peak temp
-plot(timeVec, peakT)
-ylabel('Peak Temperature [K]');
-xlabel('Time [s]');
-title('Peak Temperature Transient');
+title('Steady-State Solution for a Uniformly Heated Slab');
 
 %% Store Results
 % ------------------------------------------------------------------------------
+subsubfolder = [num2str(Deltat),'dt_',num2str(size),'cm'];
+plotOut = fullfile(myCWD,subfolder,subsubfolder);
+mkdir(plotOut)
 
-subsubsubfolder = [num2str(T_infty),'T_',num2str(thish),'h'];
-newDest = fullfile(plotOut,subsubsubfolder);
-mkdir(newDest)
+% Save Figure
+saveas(figure(1),fullfile(plotOut,'tempContour.jpg'));
 
-% Save Figures
-saveas(figure(1),fullfile(newDest,'tempContour.jpg'));
-saveas(figure(2),fullfile(newDest,'transientContour.jpg'));
-
-% And Solution Matrices
-save(fullfile(newDest,'Tplot.mat'), 'Tref2Plot');
-save(fullfile(newDest,'transientT.mat'), 'peakT');
-save(fullfile(newDest,'timeVec.mat'), 'timeVec');
+% And Steady State Solution Matrix
+save(fullfile(plotOut,'Tplot.mat'), 'Tref2Plot');
 
 % And Timing Info
 tAvg = tTot/p;
-fid = fopen(fullfile(newDest,'time.txt'),'wt');
+fid = fopen(fullfile(plotOut,'time.txt'),'wt');
 fprintf(fid, 'Total CPU-time: %s s\nAverage Time per Iteration: %s s\n', string(tTot), string(tAvg));
 fclose(fid);
 

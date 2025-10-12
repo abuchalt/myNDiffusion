@@ -58,10 +58,10 @@ Deltay = Deltax;
 
 % VERIFY FOURIER NUMBER
 Fo = 0; % Arbitrarily Small Initial Guess
-for myMat = 1:numel(M) % For each material
-    thisk = M{myMat}.k;
-    thisrhoc_p = M{myMat}.rhoc_p;
-    thish = M{myMat}.h;
+for thisMat = 1:numel(M) % For each material
+    thisk = M{thisMat}.k;
+    thisrhoc_p = M{thisMat}.rhoc_p;
+    thish = M{thisMat}.h;
 
     thisFo = thisk*Deltat/(thisrhoc_p*Deltax^2);
     
