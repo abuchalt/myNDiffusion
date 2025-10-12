@@ -1,4 +1,4 @@
-%% 2D Cartesian Heat Diffusion (IMPLICIT)
+%% 2D Cartesian Heat Diffusion (IMPLICIT) (Restart)
 % ------------------------------------------------------------------------------
 % Adam Buchalter
 %
