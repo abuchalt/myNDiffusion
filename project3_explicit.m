@@ -36,7 +36,7 @@ i_max = 9;
 j_max = i_max;
 
 % Define time stepping
-Deltat = 0.1; % [s]
+Deltat = 0.005; % [s]
 
 %% Nondimensional Domain Prep
 % ------------------------------------------------------------------------------
@@ -405,7 +405,7 @@ while (residual > epsilon)
     tTot = tTot + toc(tStart);
 
     % Plot solution
-    if mod(p,100) == 0
+    if mod(p,1000) == 0
         Tplot = T_r*reshape(T, i_max, j_max); % Reshape and Renormalize to Reference Temperature
         figure(1);
         surf(x,y,Tplot);

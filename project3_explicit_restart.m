@@ -10,9 +10,9 @@
 %% Modify Computational Parameters
 % ------------------------------------------------------------------------------
 % Bulk Convective Fluid Temperature
-T_infty = 18; % def 20 [K]
+T_infty = 20; % def 20 [K]
 % Convective Heat Transfer Coefficient
-thish = 0.1; % def 0.1 [W/cm^2.K]
+thish = 0.09; % def 0.1 [W/cm^2.K]
 
 %% Nondimensional Domain Prep
 % ------------------------------------------------------------------------------
@@ -316,7 +316,7 @@ while (residual > epsilon)
     tTot = tTot + toc(tStart);
 
     % Plot solution
-    if mod(p,100) == 0
+    if mod(p,1000) == 0
         Tplot = T_r*reshape(T, i_max, j_max); % Reshape and Renormalize to Reference Temperature
         figure(1);
         surf(x,y,Tplot);

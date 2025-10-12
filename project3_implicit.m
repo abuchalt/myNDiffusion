@@ -32,7 +32,7 @@ T_infty = 20; % [K]
 % Define mesh size
 % fprintf('Quarter-mesh size') % separate print and input b/c vscode extension
 % i_max = input('');
-i_max = 9;
+i_max = 17;
 j_max = i_max;
 
 % Define time stepping
@@ -401,7 +401,7 @@ while (residual > epsilon)
     tTot = tTot + toc(tStart);
 
     % Plot solution
-    if mod(p,100) == 0
+    if mod(p,1000) == 0
         Tplot = T_r*reshape(T, i_max, j_max); % Reshape and Renormalize to Reference Temperature
         figure(1);
         surf(x,y,Tplot);
