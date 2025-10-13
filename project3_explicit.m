@@ -32,7 +32,7 @@ T_infty = 20; % [K]
 % Define mesh size
 % fprintf('Quarter-mesh size') % separate print and input b/c vscode extension
 % i_max = input('');
-i_max = 9;
+i_max = 33;
 j_max = i_max;
 
 % Define time stepping

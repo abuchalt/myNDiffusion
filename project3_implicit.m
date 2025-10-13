@@ -32,11 +32,11 @@ T_infty = 20; % [K]
 % Define mesh size
 % fprintf('Quarter-mesh size') % separate print and input b/c vscode extension
 % i_max = input('');
-i_max = 17;
+i_max = 129;
 j_max = i_max;
 
 % Define time stepping
-Deltat = 0.1; % [s]
+Deltat = 200; % [s]
 
 %% Nondimensional Domain Prep
 % ------------------------------------------------------------------------------
