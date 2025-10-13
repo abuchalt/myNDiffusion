@@ -166,16 +166,16 @@ xFit = linspace(0, max(h));
 yFit = polyval(coefficients , xFit);
 % Inspect Closeness
 figure(3);
-plot(h, errList*1E4, '.', 'MarkerSize', 15); % Plot Real Data
+plot(h, errList*1E3, '.', 'MarkerSize', 15); % Plot Real Data
 hold on;
-plot(xFit, yFit*1E4, 'k--'); % Plot Fit
+plot(xFit, yFit*1E3, 'k--'); % Plot Fit
 % extrapPeakT = polyval(coefficients,0);
 % yl = yline(extrapPeakT,'--',['Extrapolated: ',num2str(extrapPeakT,'%.2f'),' K'],'interpreter','latex');
 % yl.LabelHorizontalAlignment = 'center';
 % yl.LabelVerticalAlignment = 'bottom';
 % yl.Color = [.90 0 0];
 hold off;
-ylabel('Relative Global Error $\times 10^{-4}$','interpreter','latex');
+ylabel('Relative Global Error $\times 10^{-3}$','interpreter','latex');
 xlabel('Relative Time Spacing $\Delta t$','interpreter','latex');
 title('Estimate Temporal Convergence Order by Global Error Reduction in Transient','interpreter','latex');
 set(gca, 'XDir', 'reverse');
@@ -341,3 +341,36 @@ title('Estimate Temporal Convergence Order by Global Error Reduction in Transien
 set(gca, 'XDir', 'reverse');
 filename = 'ImplicitTemporalConv.jpg';
 saveas(figure(6),fullfile(myOutFolder,filename));
+
+
+%% Temperature Line Profiles
+% ------------------------------------------------------------------------------
+meshSize = 257;
+dt = 200;
+midline = (meshSize+1)/2;
+Deltax = mySize/meshSize;
+
+folderName = string(meshSize)+'x'+string(meshSize)+'\\'+num2str(dt)+'dt_'+num2str(mySize)+'cm';
+myName = 'Tplot.mat';
+resultOut = fullfile(impFolder,folderName,myName);
+s = load(resultOut);
+Tplot = s.Tref2Plot;
+
+% Gather and Plot Fluxes
+figure(7);
+for i = 1:meshSize
+    fullx(i) = Deltax/2 + Deltax*(i-1);
+end
+plot(fullx, Tplot(:, midline));
+% hold on;
+% xl = xline(matching_rows_combined.modThick,'--', 'HandleVisibility', 'off');
+% hold on;
+% xl2 = xline(max(fullx) - matching_rows_combined.modThick,'--', 'HandleVisibility', 'off');
+% hold off;
+% legend;
+ylabel('Temperature [K]','interpreter','latex');
+xlabel('x-Axis Distance [cm]','interpreter','latex');
+title('Centerline Temperature Profile','interpreter','latex');
+xlim([0 mySize])
+filename = 'centerlineTBest.jpg';
+saveas(figure(7),fullfile(myOutFolder,filename));
