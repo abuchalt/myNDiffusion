@@ -1,4 +1,4 @@
-%% 2D Cartesian Heat Diffusion
+%% 2D Cartesian Heat Diffusion (RESTART)
 % ------------------------------------------------------------------------------
 % Adam Buchalter
 %
@@ -6,120 +6,14 @@
 % cartesian slab geometry using a cell-centered finite-volume discretization 
 % scheme and Newton (convective) boundary conditions.
 % ------------------------------------------------------------------------------
-clear all; close all; clc;
-
-%% Import Data
-% ------------------------------------------------------------------------------
-myCWD = pwd;
-UO2 = readtable(fullfile(myCWD,'thermalData\\UO2.csv'));
-H2O = readtable(fullfile(myCWD,'thermalData\\H2O.csv'));
-
-% Cell Array of Materials
-M = {UO2, H2O};
-
-% Physical params
-% Output of Proj2 Already Normalized to 3000--- not necessary
-% totPwr = 3000; % Total Core Power [MW_{th}]
-% fuelLength = 400; % Total Average Fuel Rod Length [cm]
-% totLinPwr = 1E6*totPwr/fuelLength; % Total Linear Heat Generation [W/cm]
 
 %% Computational Parameters
 % ------------------------------------------------------------------------------
 % Bulk Convective Fluid Temperature
 T_infty = 300; % [K]
 
-G = 2; % Number of energy groups
-
-% Define mesh size
-% fprintf('Quarter-mesh size') % separate print and input b/c vscode extension
-% i_max = input('');
-i_max = 65;
-j_max = i_max;
-
-% Define time stepping
-Deltat = 100; % [s]
-
-%% Nondimensional Domain Prep
-% ------------------------------------------------------------------------------
-
-% Define physical domain
-size = 125; % Domain Size [cm]
-maxNodes = i_max*2 - 1; % Total number of nodes in domain
-fuelDim = 58; % Fuel Dimensions [Deltax] or [number of nodes]
-modDim = ceil((maxNodes-fuelDim)/2);
-
-% Unitless Constants
-T_r = T_infty; % [K]
-
-% Calculate step sizes
-Deltax = size/(i_max*2 - 1);
-Deltay = Deltax;
-% Deltaxbar = sizebar/(i_max*2 - 1);
-% Deltaybar = Deltaxbar;
-
-% VERIFY FOURIER NUMBER
-% Fo = 0; % Arbitrarily Small Initial Guess
-% for thisMat = 1:numel(M) % For each material
-%     thisk = M{thisMat}.k;
-%     thisrhoc_p = M{thisMat}.rhoc_p;
-%     thish = M{thisMat}.h;
-
-%     thisFo = thisk*Deltat/(thisrhoc_p*Deltax^2);
-    
-%     if thisFo > Fo % If larger, use as new fourier number
-%         Fo = thisFo;
-%     end
-% end
-% fprintf(1,'Fo = %f\n',Fo);
-
-% Define x and y values in spatial domain (fully dimensional)
-for i = 1:i_max
-    for j = 1:j_max
-        x(i,j) = Deltax*(i-1);
-        y(i,j) = Deltay*(j-1);
-    end
-end
-
-% Define x and y values in complete spatial domain
-for i = 1:(2*i_max)-1
-    for j = 1:(2*j_max)-1
-        fullx(i,j) = Deltax*(i-1);
-        fully(i,j) = Deltay*(j-1);
-    end
-end
-
-% Specify materials in domain
-quarterFuelDim = (fuelDim+1)/2;
-for i = 1:i_max
-    for j = 1:j_max
-        if i <= quarterFuelDim && j_max-j+1 <= quarterFuelDim % because of reflection mapping j is flipped
-            mat(i,j) = 1; % fuel
-            ind(i,j) = pmap(i,j,i_max); % fuel
-        else
-            mat(i,j) = 2; % moderator
-            ind(i,j) = pmap(i,j,i_max); % moderator
-        end
-    end
-end
-
-% Specify Internal Volumetric Heat Generation [W/cm^3]
-myCWD = pwd;
-subfolder = 'results\\project2\\'+string(maxNodes)+'x'+string(maxNodes);
-plotsfolder = [num2str(fuelDim),'_',num2str(modDim),'_',num2str(size)];
-fprintf(['Pulling Heat Gen From ',plotsfolder,':\n'])
-plotOut = fullfile(myCWD,subfolder,plotsfolder);
-myres = load(fullfile(plotOut,'phiPlot.mat'));
-phiPlotOrganized = myres.phiPlotOrganized;
-
-q3prime = zeros(i_max*j_max,1);
-for mygroup = 1:G
-    phiunPlot = reshape(phiPlotOrganized(mygroup, i_max:end, 1:j_max), i_max, j_max);
-    q3prime = q3prime + phiunPlot(:)/1000;
-end
-
-% File Info
-subfolder='results\\project3ec\\';
-mkdir(fullfile(myCWD,subfolder));
+% Redefine time stepping
+Deltat = 1000; % [s]
 
 %% Build Coefficient Matrices
 % ------------------------------------------------------------------------------
