@@ -28,6 +28,8 @@ M = {UO2, H2O};
 % Bulk Convective Fluid Temperature
 T_infty = 300; % [K]
 
+G = 2; % Number of energy groups
+
 % Define mesh size
 % fprintf('Quarter-mesh size') % separate print and input b/c vscode extension
 % i_max = input('');
@@ -111,16 +113,15 @@ phiPlotOrganized = myres.phiPlotOrganized;
 
 q3prime = zeros(i_max*j_max,1);
 for mygroup = 1:G
-    phiunPlot = phiPlotOrganized(mygroup, :);
-    q3prime = q3prime + phiunPlot;
+    phiunPlot = reshape(phiPlotOrganized(mygroup, i_max:end, 1:j_max), i_max, j_max);
+    q3prime = q3prime + phiunPlot(:);
 end
 
-fprintf('test')
+fprintf('start working here')
 pause();
 
 % File Info
-subfolder='results\\project3imp\\'+string((2*i_max)-1)+'x'+string((2*i_max)-1);
-% subfolder='results\\project2\\'+string((2*i_max)-1)+'x'+string((2*i_max)-1)+'_4G';
+subfolder='results\\project3ec\\';
 mkdir(fullfile(myCWD,subfolder));
 
 %% Build Coefficient Matrices
