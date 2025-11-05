@@ -374,3 +374,35 @@ title('Centerline Temperature Profile','interpreter','latex');
 xlim([0 mySize])
 filename = 'centerlineTBest.jpg';
 saveas(figure(7),fullfile(myOutFolder,filename));
+
+% look at best explicit too
+meshSize = 65;
+dt = 0.005;
+midline = (meshSize+1)/2;
+Deltax = mySize/meshSize;
+
+folderName = string(meshSize)+'x'+string(meshSize)+'\\'+num2str(dt)+'dt_'+num2str(mySize)+'cm';
+myName = 'Tplot.mat';
+resultOut = fullfile(expFolder,folderName,myName);
+s = load(resultOut);
+Tplot = s.Tref2Plot;
+
+% Gather and Plot Fluxes
+figure(8);
+clear fullx
+for i = 1:meshSize
+    fullx(i) = Deltax/2 + Deltax*(i-1);
+end
+plot(fullx, Tplot(:, midline));
+% hold on;
+% xl = xline(matching_rows_combined.modThick,'--', 'HandleVisibility', 'off');
+% hold on;
+% xl2 = xline(max(fullx) - matching_rows_combined.modThick,'--', 'HandleVisibility', 'off');
+% hold off;
+% legend;
+ylabel('Temperature [K]','interpreter','latex');
+xlabel('x-Axis Distance [cm]','interpreter','latex');
+title('Centerline Temperature Profile','interpreter','latex');
+xlim([0 mySize])
+filename = 'centerlineTExp.jpg';
+saveas(figure(8),fullfile(myOutFolder,filename));

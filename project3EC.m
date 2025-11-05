@@ -37,7 +37,7 @@ i_max = 65;
 j_max = i_max;
 
 % Define time stepping
-Deltat = 100; % [s]
+Deltat = 1; % [s]
 
 %% Nondimensional Domain Prep
 % ------------------------------------------------------------------------------

@@ -13,7 +13,7 @@
 T_infty = 300; % [K]
 
 % Redefine time stepping
-Deltat = 1000; % [s]
+Deltat = 200; % [s]
 
 %% Build Coefficient Matrices
 % ------------------------------------------------------------------------------
@@ -271,18 +271,6 @@ Q(k) = (Deltat/(thisrhoc_p*T_r))*q3prime(k) + (thish_ke*Deltat*T_infty/(thisrhoc
 
 %% Solve
 % ------------------------------------------------------------------------------
-
-% Init Solution Variables (1D because we use pointer mapping)
-T = ones(i_max*j_max,1);
-% "Old" Solution for computing residual
-T_old = ones(i_max*j_max,1);
-
-% Define variables for time-iteration
-residual = 1.0E5; % init residual
-epsilon = 1.0E-16; % drive residual down to this value before terminating
-myt = 0; % Init time
-tTot = 0; % and computation time
-p = 0; % track iteration
 
 while (residual > epsilon)
 % while (p < 1)
