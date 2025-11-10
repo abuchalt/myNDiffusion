@@ -277,9 +277,6 @@ print()
 # Pr = C_p*mu/k_H2O # Prandtl Number
 # h_coolant = (0.023*k_H2O/D_eq)*Re**0.8*Pr**0.4 # Water Convective Heat Transfer Coefficient via Dittus-Boelter [W/m^2.K]
 h_coolant = 3.5
-k_favg = 0.03
-k_gapavg = 0.0015
-k_c = 0.15
 
 T_co = T_infty + q_s/(2*np.pi*(R+g+c)*L*h_coolant) # Cladding Outer Temp [K]
     
