@@ -170,3 +170,19 @@ end
 if Tcmax > Tclim
     fprintf('Clad Limit Exceeded!')
 end
+
+%% Visualize Results
+% ------------------------------------------------------------------------------
+figure(2);
+plot(r, T);
+ylabel('Temperature [K]');
+xlabel('r [cm]');
+title('Meltdown Condition Profile');
+
+%% Store Results
+% ------------------------------------------------------------------------------
+plotOut = fullfile(myCWD,'results','project4');
+mkdir(plotOut);
+
+% Save Figure
+saveas(figure(2),fullfile(plotOut,'meltdownProfile.jpg'));
