@@ -9,6 +9,8 @@
 # ------------------------------------------------------------------------------
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.io as sio
+import os
 
 # Constants
 # ------------------------------------------------------------------------------
@@ -219,6 +221,7 @@ plt.title('Radial Temperature Profile')
 plt.tight_layout()
 plt.savefig('results\\project4\\radialTemperatureCurve.jpg')
 plt.show()
+plt.close()
 
 k_favg = np.average(kFuel(Tfuelr)) # RADIALLY averaged fuel conductivity [W/cm.K]
 h_gapavg = np.average(hGap(Tgapr, T_ci)) # Radial average gap heat transfer [W/cm^2.K]
@@ -233,6 +236,7 @@ print("q3prime =", str.format('{0:.5f}', q3prime), "W/cm^3")
 print("q_s =", str.format('{0:.5f}', q_s), "W")
 print()
 
+# -----------------------------------------------------------------------------
 # Redo with Collapsed Properties
 # -----------------------------------------------------------------------------
 
@@ -261,6 +265,15 @@ def Tgap2(q_s, r, T_ci, k_gap):
 def Tfuel2(q_s, r, T_s, k_f):
     T = T_s + (q_s*(R**2-r**2))/(L*np.pi*(R**2)*4*k_f)
     return T
+
+def fullDomain(r, q_s, T_co, T_ci, T_s, k_c, k_gap, k_f):
+    if r < R:
+        return Tfuel2(q_s, r, T_s, k_f)
+    elif r < R + g:
+        return Tgap2(q_s, r, T_ci, k_gap)
+    elif r < R + g + c:
+        return Tclad(q_s, r, T_co)
+    return T_infty
 
 # Bulk Fluid Temperature Value
 # -----------------------------------------------------------------------------
@@ -338,3 +351,75 @@ plt.title('Radial Temperature Profile')
 plt.tight_layout()
 plt.savefig('results\\project4\\radialTemperatureCurve2.jpg')
 plt.show()
+plt.close()
+
+# -----------------------------------------------------------------------------
+# Compare Analytical and Numerical
+# -----------------------------------------------------------------------------
+
+NodeList = np.array([9, 17, 33, 65, 129, 257, 513, 1025]) # Number of Nodes
+ErrList = np.zeros_like(NodeList, dtype=np.float32) # Error List
+
+mycwd = os.getcwd()
+
+i = 0
+for N in NodeList:
+    folder = os.path.join(mycwd,'results','project4',str(N)+'nodes')
+    r_data = sio.loadmat(os.path.join(folder, 'r.mat'))
+    myr = np.array(r_data['r']).reshape(-1)
+    T_data = sio.loadmat(os.path.join(folder, 'T.mat'))
+    myT = np.array(T_data['T']).reshape(-1)
+    anaT = np.zeros_like(myT)
+    j = 0
+    for r in myr:
+        anaT[j] = fullDomain(r, q_s, T_co, T_ci, T_s, k_c, k_gapavg, k_favg)
+        j += 1
+    ErrList[i] = np.sum(np.subtract(anaT, myT))/float(np.size(anaT))
+    # plt.plot(myr, anaT)
+    # plt.show()
+    i += 1
+
+# print(ErrList)
+
+# Evaluate Order of Convergence Directly
+r = 2
+p2 = np.log((ErrList[-3]-ErrList[-2])/(ErrList[-2]-ErrList[-1]))/np.log(r)
+print('Order of Grid Convergence by Global Error:', p2)
+
+h = np.divide(1, NodeList)
+coefficients = np.polyfit(h, ErrList, 1)
+linear_poly = np.poly1d(coefficients)
+plt.plot(h, linear_poly(h), '-')
+plt.plot(h, ErrList, '.')
+plt.xlim(np.max(h), 0)
+plt.title('Global Error Convergence')
+plt.xlabel('Relative Grid Spacing $h$')
+plt.ylabel('Average Global Error (K)')
+plt.tight_layout()
+plt.savefig('results\\project4\\convergence.jpg')
+plt.show()
+plt.close()
+
+N = 129
+
+folder = os.path.join(mycwd,'results','project4',str(N)+'nodes')
+r_data = sio.loadmat(os.path.join(folder, 'r.mat'))
+myr = np.array(r_data['r']).reshape(-1)
+T_data = sio.loadmat(os.path.join(folder, 'T.mat'))
+myT = np.array(T_data['T']).reshape(-1)
+anaT = np.zeros_like(myT)
+j = 0
+for r in myr:
+    anaT[j] = fullDomain(r, q_s, T_co, T_ci, T_s, k_c, k_gapavg, k_favg)
+    j += 1
+
+plt.plot(myr, anaT, '-', label='Analytical')
+plt.plot(myr, myT, '.', label='Numerical', markersize=1)
+plt.xlabel('Radius (cm)')
+plt.ylabel('Temperature (K)')
+plt.title('Comparison of Analytical and Numerical Temperature Profile')
+plt.legend()
+plt.tight_layout()
+plt.savefig('results\\project4\\comparison.jpg')
+plt.show()
+plt.close()

@@ -30,11 +30,12 @@ M = {fuel, gap, clad};
 T_infty = 589.15; % [K]
 
 % Define mesh size
-N_fuel = 129;
+nodesPerReg = 129;
+N_fuel = nodesPerReg;
 deltar_fuel = R/N_fuel;
-N_gap = 129;
+N_gap = nodesPerReg;
 deltar_gap = g/N_gap;
-N_clad = 129;
+N_clad = nodesPerReg;
 deltar_clad = c/N_clad;
 
 i_max = N_fuel+N_gap+N_clad;
@@ -48,7 +49,7 @@ for i = 1:i_max
         mat(i) = 1;
         deltar(i) = deltar_fuel;
         r(i) = i*deltar_fuel - deltar_fuel/2;
-    elseif i <= N_fuel+N_clad
+    elseif i <= N_fuel+N_gap
         mat(i) = 2;
         deltar(i) = deltar_gap;
         r(i) = N_fuel*deltar_fuel + (i - N_fuel)*deltar_gap - deltar_gap/2;
@@ -115,4 +116,57 @@ A = sparse(A);
 
 T = A\Q;
 
+%% Visualize Results
+% ------------------------------------------------------------------------------
+figure(1);
 plot(r, T);
+ylabel('Temperature [K]');
+xlabel('r [cm]');
+title('Steady-State Solution for a Westinghouse PWR Fuel Pin');
+
+%% Store Results
+% ------------------------------------------------------------------------------
+subsubfolder = [num2str(nodesPerReg),'nodes'];
+plotOut = fullfile(myCWD,'results','project4',subsubfolder);
+mkdir(plotOut);
+
+% Save Figure
+saveas(figure(1),fullfile(plotOut,'tempContour.jpg'));
+
+% And Steady State Solution Matrix
+save(fullfile(plotOut,'T.mat'), 'T');
+save(fullfile(plotOut,'r.mat'), 'r');
+
+%% Try Different h_coolant
+% ------------------------------------------------------------------------------
+
+h_coolant = 0.0192332; % Coolant Convective Heat Transfer [W/cm^2.K]
+Tclim = 1850+273.15; % Clad Thermal Limit [C->K]
+Tflim = 2800+273.15; % Fuel Thermal Limit [C->K]
+
+% Outermost Boundary -- Newton
+i = i_max;
+
+thisk = M{mat(i)}.k;
+thisk_inner = M{mat(i-1)}.k;
+
+innerCoeff = 2.0 * ( r(i) - deltar(i)/2 ) * ( thisk_inner*deltar(i-1) + thisk*deltar(i) ) / ( r(i) * deltar(i) * ( deltar(i-1) + deltar(i) )^2 );
+
+A(i,i-1) = innerCoeff;
+A(i,i) = -innerCoeff - h_coolant / ( r(i) * deltar(i) );
+
+Q(i) = - h_coolant * T_infty / ( r(i) * deltar(i) );
+
+A = sparse(A);
+
+T = A\Q;
+
+Tfmax = T(1)
+Tcmax = T(N_fuel+N_gap+1)
+
+if Tfmax > Tflim
+    fprintf('Fuel Limit Exceeded!')
+end
+if Tcmax > Tclim
+    fprintf('Clad Limit Exceeded!')
+end
