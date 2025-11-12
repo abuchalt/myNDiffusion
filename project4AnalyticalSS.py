@@ -2,7 +2,12 @@
 # ------------------------------------------------------------------------------
 # Adam Buchalter
 #
-# Desc.
+# Analytical solution to the 1D steady-state heat diffusion problem in a model
+# Westinghouse PWR fuel pin in cylindrical (radial) coordinates with Neumann
+# and Dirichlet boundary conditions with Newton-derived outermost Dirichlet
+# condition
+#
+# Comparison to the Numerical Solution and grid convergence study
 # ------------------------------------------------------------------------------
 
 # Packages

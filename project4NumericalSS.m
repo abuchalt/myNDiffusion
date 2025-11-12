@@ -2,7 +2,9 @@
 % ------------------------------------------------------------------------------
 % Adam Buchalter
 %
-% words
+% Numerical solution to the 1D steady-state heat diffusion problem in a model
+% Westinghouse PWR fuel pin in cylindrical (radial) coordinates with Neumann
+% and Newton boundary conditions
 % ------------------------------------------------------------------------------
 clear all; close all; clc;
 
