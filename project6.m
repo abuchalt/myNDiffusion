@@ -9,8 +9,8 @@ clear all; close all; clc;
 %% Import Data
 % ------------------------------------------------------------------------------
 myCWD = pwd;
-FUL = readtable(fullfile(myCWD,'proj5Data\\thermalData\\Fuel_Lump.csv'));
-MOD = readtable(fullfile(myCWD,'proj5Data\\thermalData\\H2O_Lump.csv'));
+FUL = readtable(fullfile(myCWD,'proj6Data\\thermalData\\Fuel_Lump.csv'));
+MOD = readtable(fullfile(myCWD,'proj6Data\\thermalData\\H2O_Lump.csv'));
 
 % Cell Array of Materials
 M = {FUL, MOD};
@@ -28,6 +28,22 @@ LAYOUT = [
 % totPwr = 3000; % Total Core Power [MW_{th}]
 % fuelLength = 400; % Total Average Fuel Rod Length [cm]
 % totLinPwr = 1E6*totPwr/fuelLength; % Total Linear Heat Generation [W/cm]
+
+%% Intelligently Find Smallest Diffusion Length for Non-Dimensionalization
+% ------------------------------------------------------------------------------
+% The smallest diffusion length is important because if our cells are larger
+% than the diffusion length for a particular group then we cannot reliably
+% capture transport phenomena
+
+% L = 50; % [cm] Arbitrarily Large Initial Guess
+% for mat = 1:numel(M) % For each material
+%     for group = 1:G % For each group
+%         thisL = sqrt(M{mat}.D(group)/M{mat}.Sigma_a(group)); % Characteristic Diffusion Length [cm]
+%         if thisL < L % If smaller, use as new normalization length
+%             L = thisL;
+%         end
+%     end
+% end
 
 %% Computational Parameters
 % ------------------------------------------------------------------------------

@@ -133,8 +133,8 @@ class InterpolatedProperties:
         return k_val
 
 
-UO2_rhoC_p = 'proj5Data\\thermalData\\UO2_rhoC_p.csv'
-UO2_k = 'proj5Data\\thermalData\\UO2_k.csv'
+UO2_rhoC_p = 'proj6Data\\thermalData\\UO2_rhoC_p.csv'
+UO2_k = 'proj6Data\\thermalData\\UO2_k.csv'
 fuelObj = InterpolatedProperties(UO2_rhoC_p, UO2_k)
 
 # Functions
@@ -305,7 +305,7 @@ print()
 # k_FA = 8*np.pi*k_favg
 k_FA = 1/( (1/(8*np.pi*k_favg)) + (np.log((R+g)/R)/(2*np.pi*k_gapavg)) + (np.log((R+g+c)/(R+g))/(2*np.pi*k_c)) + (1/(2*np.pi*(R+g+c)*h_coolant)) ) # Effective Thermal Conductivity of a Fuel Assembly [W/cm.K]
 
-FA_CSV = 'proj5Data\\thermalData\\Fuel_Lump.csv'
+FA_CSV = 'proj6Data\\thermalData\\Fuel_Lump.csv'
 header = ["k", "rhoCp", "conv"]
 row = [k_FA, rhoC_pavg, 0]
 with open(FA_CSV, "w", newline="") as myFile:
@@ -313,7 +313,7 @@ with open(FA_CSV, "w", newline="") as myFile:
     writer.writerow(header)
     writer.writerow(row)
 
-MOD_CSV = 'proj5Data\\thermalData\\H2O_Lump.csv'
+MOD_CSV = 'proj6Data\\thermalData\\H2O_Lump.csv'
 header = ["k", "rhoCp", "conv"]
 row = [0.006, rho_H2O*C_p, 1]
 with open(MOD_CSV, "w", newline="") as myFile:
