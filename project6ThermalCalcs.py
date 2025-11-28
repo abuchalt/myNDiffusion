@@ -27,10 +27,12 @@ N_FP = 264 # Fuel Pins per Assy
 # N_GT = 24 # Guide Tubes per Assy
 # N_IT = 1 # Instrument Tubes per Assy
 N_Rods = N_FP*N_Assy # Total Number of Fuel Rods
-pitch_Assy = 8.466*2.54 # Assembly Pitch [in -> cm]
+# pitch_Assy = 8.466*2.54 # Assembly Pitch [in -> cm]
+pitch_Assy = 21.50 # Assembly Pitch [cm]
 
 # Fuel Rod Data
-pitch_FP = 0.496*2.54 # Fuel Rod Pitch [in -> cm]
+# pitch_FP = 0.496*2.54 # Fuel Rod Pitch [in -> cm]
+pitch_FP = 1.26 # Fuel Rod Pitch [cm]
 # OD_FP = 0.374*2.54 # Cladding Outer Diameter [in -> cm]
 # ID_FP = 0.326*2.54 # Cladding Inner Diameter [in -> cm]
 c = 0.024*2.54 # Clad Thickness [in -> cm]
@@ -39,10 +41,11 @@ s = 0.3195*2.54 # Fuel Pellet Diameter [in -> cm]
 R = s/2 # Fuel-pellet Radius [cm]
 E = 0.0495 # Fuel Enrichment
 f = 0.95 # Fuel Pellet Packing Density
+rho_UO2 = 10.97 # Theoretical Density [g/cc]
 
 # Guide/Instrument Tube Data
-# OD_GT = 0.482*2.54 # Guide Tube Outer Diameter [in -> cm]
-# ID_GT = 0.397*2.54 # Guide Tube Inner Diameter [in -> cm]
+OD_GT = 0.482*2.54 # Guide Tube Outer Diameter [in -> cm]
+ID_GT = 0.397*2.54 # Guide Tube Inner Diameter [in -> cm]
 
 # Thermal Hydraulic Data
 p = 1.2755E7 # System Pressure [Pa]
@@ -69,6 +72,30 @@ q3prime = Q/V_fuel; # Average Fuel Volumetric Heat Rate [W/cc]
 q_s = Q/N_Rods # Total Heat Generation in a Single Fuel Element [W]
 # T_infty = (T_in+T_out)/2 # Bulk Fluid Temperature [K]
 T_infty = (543-32)*(5/9) + 273.15 # Avg Coolant Temperature [F->K]
+
+# CASMO Input Params 
+PDE = Q/(L*np.pi*np.power(R,2)*N_Rods) # [kW/L]
+print('PDE', PDE)
+PRE = p*1e-5 # [bar]
+print('PRE', PRE)
+print('PIN 1  ', R, ' ', R+g, ' ', R+g+c, '* FUEL PIN')
+print('PIN 2 ', ID_GT/2, ' ', OD_GT/2, ' /  \'COO\'    \'BOX\'  * INSTR TUBE') 
+print('PIN 3 ', ID_GT/2, ' ', OD_GT/2, '/   \'COO\'    \'BOX\'  * GUIDE TUBE')
+print('FUE 1,', rho_UO2*f, '/', E*1E2)
+BORs = [0.0, 600.0, 1200.0]
+TMs = [531.5, 557.0, 587.0]
+TFs = [600.0, 850.0, 1200.0]
+i=0
+for BOR in BORs:
+    for TM in TMs:
+        for TF in TFs:
+            i+=1
+            print('TTL *+ PERTURBATION', i)
+            print('TFU', TF)
+            print('BOR', BOR)
+            print('TMO', TM)
+            print('AVE \'CELL\', / 0 1 0 0 0 0')
+exit()
 
 # Computation Parameters
 Nr = 50 # discrete radial cells
@@ -281,7 +308,7 @@ plt.xlabel('Radius (cm)')
 plt.ylabel('Temperature (K)')
 plt.title('Radial Temperature Profile')
 plt.tight_layout()
-plt.savefig('results\\project5\\radialTemperatureCurve.jpg')
+plt.savefig('results\\project6\\radialTemperatureCurve.jpg')
 plt.show()
 plt.close()
 
@@ -435,6 +462,6 @@ plt.xlabel('Radius (cm)')
 plt.ylabel('Temperature (K)')
 plt.title('Radial Temperature Profile')
 plt.tight_layout()
-plt.savefig('results\\project5\\radialTemperatureCurve2.jpg')
+plt.savefig('results\\project6\\radialTemperatureCurve2.jpg')
 plt.show()
 plt.close()

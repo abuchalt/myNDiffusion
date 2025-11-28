@@ -35,7 +35,7 @@ def parseCASMOOutput(filepath, csvout):
 
             match = re.findall(r"[-+]?\d*\.?\d+", lines[i-4])
             myDict['BURNUP'] = float(match[0])
-            myDict['V'] = float(match[1])
+            # myDict['V'] = float(match[1])
             myDict['TF'] = float(match[2])
             myDict['TM'] = float(match[3])
             myDict['BOR'] = float(match[4])
@@ -113,8 +113,80 @@ def parseCASMOOutput(filepath, csvout):
         writer.writerows(dictList)
 
     print(f"Data successfully written to {csvout}")
+    return dictList
 
-myCASMO = 'proj6Data\\CASMO\\pwrExample.out'
-myCSV = 'proj6Data\\neutronData\\test.csv'
+myCASMO = 'proj6Data\\CASMO\\nuscalePwr.out'
+myCSV = 'proj6Data\\neutronData\\nuscalePwr.csv'
+myMat = 'proj6Data\\neutronData\\interpTables.mat'
 
-parseCASMOOutput(myCASMO, myCSV)
+myDictList = parseCASMOOutput(myCASMO, myCSV)
+
+# BORs = [0.0, 200.0, 400.0, 600.0, 800.0, 1000.0]
+BORs = [0.0, 600.0, 1200.0]
+# BURNUPs = [0.0, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0]
+# BURNUPS = [0.0]
+# TMs = [532.04, 547.04, 552.04, 557.04, 562.04, 567.04, 582.04]
+TMs = [531.5, 557.0, 587.0]
+# TFs = [650.0, 750.0, 850.0, 950.0, 1050.0, 1150.0]
+TFs = [600.0, 850.0, 1200.0]
+
+Chi1 = 1
+Chi2 = 0
+D1 = np.zeros((len(TFs), len(TMs), len(BORs)))
+D2 = np.zeros_like(D1)
+Sigma_R1 = np.zeros_like(D1)
+Sigma_R2 = np.zeros_like(D1)
+Sigma_a1 = np.zeros_like(D1)
+Sigma_a2 = np.zeros_like(D1)
+# Sigma_f = np.zeros_like(D1)
+# Sigma_f = np.zeros_like(D1)
+Sigma_s11 = np.zeros_like(D1)
+Sigma_s12 = np.zeros_like(D1)
+Sigma_s21 = np.zeros_like(D1)
+Sigma_s22 = np.zeros_like(D1)
+nuSigma_f1 = np.zeros_like(D1)
+nuSigma_f2 = np.zeros_like(D1)
+
+g1ind = 0
+g2ind = 1
+
+# Convert to Format MATLAB likes for interpolation
+for myDict in myDictList:
+    
+    TF_ind = TFs.index(myDict['TF'])
+    TM_ind = TMs.index(myDict['TM'])
+    BOR_ind = BORs.index(myDict['BOR'])
+    # BURNUP_ind = BURNUPs.index(myDict['BURNUP'])
+    
+    D1[TF_ind, TM_ind, BOR_ind] = myDict['D'][g1ind]
+    D2[TF_ind, TM_ind, BOR_ind] = myDict['D'][g2ind]
+    Sigma_R1[TF_ind, TM_ind, BOR_ind] = myDict['Sigma_R'][g1ind]
+    Sigma_R2[TF_ind, TM_ind, BOR_ind] = myDict['Sigma_R'][g2ind]
+    Sigma_a1[TF_ind, TM_ind, BOR_ind] = myDict['Sigma_a'][g1ind]
+    Sigma_a2[TF_ind, TM_ind, BOR_ind] = myDict['Sigma_a'][g2ind]
+    Sigma_s11[TF_ind, TM_ind, BOR_ind] = myDict['Sigma_s1g'][g1ind]
+    Sigma_s12[TF_ind, TM_ind, BOR_ind] = myDict['Sigma_s1g'][g2ind]
+    Sigma_s21[TF_ind, TM_ind, BOR_ind] = myDict['Sigma_s2g'][g1ind]
+    Sigma_s22[TF_ind, TM_ind, BOR_ind] = myDict['Sigma_s2g'][g2ind]
+    nuSigma_f1[TF_ind, TM_ind, BOR_ind] = myDict['nuSigma_f'][g1ind]
+    nuSigma_f2[TF_ind, TM_ind, BOR_ind] = myDict['nuSigma_f'][g2ind]
+
+data_to_save = {
+    'TFs': TFs,
+    'TMs': TMs,
+    'BORs': BORs,
+    'D1': D1,
+    'D2': D2,
+    'Sigma_R1': Sigma_R1,
+    'Sigma_R2': Sigma_R2,
+    'Sigma_a1': Sigma_a1,
+    'Sigma_a2': Sigma_a2,
+    'Sigma_s11': Sigma_s11,
+    'Sigma_s12': Sigma_s12,
+    'Sigma_s21': Sigma_s21,
+    'Sigma_s22': Sigma_s22,
+    'nuSigma_f1': nuSigma_f1,
+    'nuSigma_f2': nuSigma_f2
+}
+
+sio.savemat(myMat, data_to_save)

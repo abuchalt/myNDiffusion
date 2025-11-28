@@ -25,6 +25,12 @@ LAYOUT = [
 ];
 
 % Physical params
+totPwr = 160*1E6; % Thermal Output [MW_th -> W_th]
+% NbyN = 17; % 17x17 Fuel Assembly
+fuelLength = 78.74*2.54; % Active Height [in -> cm]
+pitch_Assy = 8.466*2.54; % Assembly Pitch [in -> cm]
+
+% Physical params
 % totPwr = 3000; % Total Core Power [MW_{th}]
 % fuelLength = 400; % Total Average Fuel Rod Length [cm]
 % totLinPwr = 1E6*totPwr/fuelLength; % Total Linear Heat Generation [W/cm]
