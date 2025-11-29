@@ -95,7 +95,18 @@ for BOR in BORs:
             print('BOR', BOR)
             print('TMO', TM)
             print('AVE \'CELL\', / 0 1 0 0 0 0')
-exit()
+print()
+i=0
+for BOR in BORs:
+    for TM in TMs:
+        for TF in TFs:
+            i+=1
+            print('TTL *+ PERTURBATION', i)
+            print('TFU', TF)
+            print('BOR', BOR)
+            print('TMO', TM)
+            print('REF',pitch_Assy,'/\'MOD\' / / /')
+            print('AVE \'CELL\', / 0 1 0 0 0 0')
 
 # Computation Parameters
 Nr = 50 # discrete radial cells

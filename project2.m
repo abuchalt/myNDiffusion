@@ -332,6 +332,8 @@ end
 % Amat = inv(H-S)*F % Slowww
 % Amat = (H-S)\F; % Memory-Intensive
 Amat = (H-S)\F; % Enforce Memory Clearing (since MATLAB is weird about it)
+fprintf('bruh')
+pause()
 clearvars H S F
 
 % Init iteration vars
