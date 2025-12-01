@@ -9,9 +9,14 @@ clear all; close all; clc;
 %% Import Data
 % ------------------------------------------------------------------------------
 myCWD = pwd;
+
+% Thermal Data
 FUL = readtable(fullfile(myCWD,'proj6Data\\thermalData\\Fuel_Lump.csv'));
 MOD = readtable(fullfile(myCWD,'proj6Data\\thermalData\\H2O_Lump.csv'));
+% Cell Array of Materials
+M = {FUL, MOD};
 
+% Neutron Data
 myMat = load(fullfile(myCWD,'proj6Data\\neutronData\\interpTables.mat'));
 global FUL_TFs;
 global FUL_TMs;
@@ -77,30 +82,46 @@ MOD_Sigma_s22 = myMat.Sigma_s22;
 MOD_nuSigma_f1 = myMat.nuSigma_f1;
 MOD_nuSigma_f2 = myMat.nuSigma_f2;
 
-% Cell Array of Materials
-M = {FUL, MOD};
-
 % Core Layout
 % LAYOUT = [
 %     1 1
 %     1 1
 % ];
 LAYOUT = [
-    1 1 1 1 2 2
-    1 1 1 1 2 2
-    1 1 1 2 2 2
-    1 1 2 2 2 2
-    2 2 2 2 2 2
-    2 2 2 2 2 2
+    1 1 1 1 2
+    1 1 1 1 2
+    1 1 1 2 2
+    1 1 2 2 2
+    2 2 2 2 2
 ];
 
 % Physical params
-totPwr = 160*1E6; % Thermal Output [MW_th -> W_th]
+totPwr = 250*1E6; % Thermal Output [MW_th -> W_th]
 % NbyN = 17; % 17x17 Fuel Assembly
 fuelLength = 78.74*2.54; % Active Height [in -> cm]
 pitch_Assy = 8.466*2.54; % Assembly Pitch [in -> cm]
 totLinPwr = totPwr/fuelLength; % Total Linear Heat Generation [W/cm]
-myVel = 2.7*12*2.54; % Average in-core flow velocity [ft/s -> cm/s]
+% myVel = 2.7*12*2.54; % Average in-core flow velocity [ft/s -> cm/s]
+myVel = 0.7*12*2.54;
+T_in = (497-32)*(5/9) + 273.15; % Inlet Temperature [F->K]
+T_out = (597-32)*(5/9) + 273.15; % Outlet Temperature [F->K]
+
+% Area Corrections
+N_FP = 264; % Fuel Pins per Assy
+N_GT = 25; % Guide and Instrument Tubes per Assy
+OD_GT = 0.482*2.54; % Guide Tube Outer Diameter [in -> cm]
+pitch_Assy = 21.50; % Assembly Pitch [cm]
+c = 0.024*2.54; % Clad Thickness [in -> cm]
+g = 0.0065*2.54; % Pellet-Clad Gap [in -> cm]
+s = 0.3195*2.54; % Fuel Pellet Diameter [in -> cm]
+R = s/2; % Fuel-pellet Radius [cm]
+assyArea = pitch_Assy^2; % Fuel Assembly Area [cm^2]
+fuelArea = N_FP*pi*R^2; % Area Occupied by Fuel [cm^2]
+pinsArea = N_FP*pi*(R+g+c)^2 + N_GT*pi*(OD_GT/2)^2; % Area Occupied by not Water [cm^2]
+waterArea = assyArea-pinsArea; % Area Occupied by Water [cm^2]
+fuelCorr = fuelArea/assyArea; % Fraction of Assembly Occupied by Fuel
+modCorr = waterArea/assyArea; % Fraction of Assembly Occupied by Water
+
 
 TF_nom = 850.0; % Nominal Fuel Temperature [K]
 TM_nom = 557.0; % Nominal Moderator Temperature [K]
@@ -172,10 +193,17 @@ for iArr = 2:iArrMax
     end
 end
 
+for i = 1:i_max
+    for j = 1:j_max
+        k = pmap(i, j, j_max);
+        mat(k) = Domain(i, j);
+    end
+end
+
 %% Computational Parameters
 % ------------------------------------------------------------------------------
 % Bulk Convective Fluid Temperature
-T_infty = 557.04; % [K]
+T_infty = TM_nom; % [K]
 
 G = 2; % Number of energy groups
 
@@ -370,10 +398,9 @@ fprintf('Complete!\n');
 
 clear A S
 
-%% Iterative Solver
+%% Iterative Solver: Neutronics
 % ------------------------------------------------------------------------------
 fprintf('\n===ITERATIVE SOLVER===\n');
-fprintf('\n---Solving for Neutron Flux Profile---\n');
 fprintf('Initializing...\n');
 % Init Thermal Matrices
 A = spalloc(i_max*j_max, i_max*j_max, 5*i_max*j_max); % Sparsely allocate Diffusion Operator with 5 bands
@@ -408,6 +435,8 @@ for i = 1:i_max
         end
     end
 end
+
+fprintf('\n---Solving for Neutron Flux Profile---\n');
 
 % Define Matrices
 fprintf('Building Matrices...\n');
@@ -636,7 +665,7 @@ for group = 1:G
     end
 end
 
-%% Power-Iteration Script
+%% Iterative Solver: Neutronics Power-Iteration
 % ------------------------------------------------------------------------------
 % Compute evolution operator initially to minimize work in loop
 % Amat = inv(H-S)*F % Slowww
@@ -699,8 +728,185 @@ keff = phiT * (Amat * phi); % Search Dominant Eigenvalue
 
 q3prime = phi(1:i_max*j_max)+phi(1+i_max*j_max:2*i_max*j_max);
 q3prime = (totLinPwr/4)*q3prime/(sum(q3prime,'all')*Deltax*Deltay);
+% q3prime = (totPwr/4)*q3prime/(sum(q3prime,'all')*Deltax*Deltay);
 
 % pause()
+
+%% Iterative Solver: Heat Diffusion
+% ------------------------------------------------------------------------------
+
+fprintf('\n---Solving for Temperature Profile---\n');
+MOD_rhoc_p = M{2}.rhoCp;
+dTdz = (T_out-T_in)/fuelLength;
+
+% Define Matrices
+fprintf('Building Matrices...\n');
+% Q = q3prime - MOD_rhoc_p*dTdz*w;
+for i = 2:i_max-1
+    for j = 2:j_max-1
+        k = pmap(i, j, j_max); % what node #
+        k_e = k + 1;
+        k_w = k - 1;
+        k_n = k - j_max;
+        k_s = k + j_max;
+
+        % thisMat = Domain(k); % what material
+        % matnum = mat(k); % what material
+        thisk_k = M{mat(k)}.k;
+        thisk_ke = M{mat(k_e)}.k;
+        thisk_kw = M{mat(k_w)}.k;
+        thisk_kn = M{mat(k_n)}.k;
+        thisk_ks = M{mat(k_s)}.k;
+        % thisrhoc_p = M{mat(k)}.rhoCp;
+
+        if mat(k) == 1 % Fuel
+            heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
+        else
+            heatremoval = MOD_rhoc_p*dTdz*w(k);
+        end
+
+        % pointer mapping goes row-by-row to assemble Coeff. Matrix
+        A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
+        A(k,k_e) = -(thisk_ke+thisk_k)/Deltax^2;
+        A(k,k_w) = -(thisk_kw+thisk_k)/Deltax^2;
+        A(k,k_n) = -(thisk_kn+thisk_k)/Deltay^2;
+        A(k,k_s) = -(thisk_ks+thisk_k)/Deltay^2;
+        %
+        Q(k) = (q3prime(k) - heatremoval)/1E4;
+    end
+end
+
+% Apply BCs
+% Left BC
+for i = 2:i_max-1 % Avoid corners
+    for j = 1:1
+        k = pmap(i, j, j_max); % what node #
+        ksym = sympmap(i,j,j_max);
+        k_e = k + 1;
+        k_n = k - j_max;
+        k_s = k + j_max;
+        k_w = ksym + j_max;
+
+        % thisMat = Domain(k); % what material
+        % matnum = mat(k); % what material
+        thisk_k = M{mat(k)}.k;
+        thisk_ke = M{mat(k_e)}.k;
+        thisk_kw = M{mat(k_w)}.k;
+        thisk_kn = M{mat(k_n)}.k;
+        thisk_ks = M{mat(k_s)}.k;
+        % thisrhoc_p = M{mat(k)}.rhoCp;
+
+        if mat(k) == 1 % Fuel
+            heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
+        else
+            heatremoval = MOD_rhoc_p*dTdz*w(k);
+        end
+
+        % pointer mapping goes row-by-row to assemble Coeff. Matrix
+        A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
+        A(k,k_e) = A(k,k_e) - (thisk_ke+thisk_k)/Deltax^2;
+        A(k,k_w) = A(k,k_w) - (thisk_kw+thisk_k)/Deltax^2;
+        A(k,k_n) = A(k,k_n) - (thisk_kn+thisk_k)/Deltay^2;
+        A(k,k_s) = A(k,k_s) - (thisk_ks+thisk_k)/Deltay^2;
+        %
+        Q(k) = (q3prime(k) - heatremoval)/1E4;
+    end
+end
+% Right BC
+for i = 1:i_max
+    for j = j_max:j_max
+        k = pmap(i, j, j_max); % what node #
+        A(k,k) = 1.0;
+        Q(k) = T_infty;
+    end
+end
+% Bottom BC
+for i = i_max:i_max
+    for j = 1:j_max
+        k = pmap(i, j, j_max); % what node #
+        A(k,k) = 1.0;
+        Q(k) = T_infty;
+    end
+end
+% Top BC
+for i = 1:1
+    for j = 2:j_max-1 % Avoid corners
+        k = pmap(i, j, j_max); % what node #
+        ksym = sympmap(i,j,j_max);
+        k_e = k + 1;
+        k_w = k - 1;
+        k_s = k + j_max;
+        k_n = ksym + 1;
+
+        % thisMat = Domain(k); % what material
+        % matnum = mat(k); % what material
+        thisk_k = M{mat(k)}.k;
+        thisk_ke = M{mat(k_e)}.k;
+        thisk_kw = M{mat(k_w)}.k;
+        thisk_kn = M{mat(k_n)}.k;
+        thisk_ks = M{mat(k_s)}.k;
+        % thisrhoc_p = M{mat(k)}.rhoCp;
+
+        if mat(k) == 1 % Fuel
+            heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
+        else
+            heatremoval = MOD_rhoc_p*dTdz*w(k);
+        end
+
+        % pointer mapping goes row-by-row to assemble Coeff. Matrix
+        A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
+        A(k,k_e) = A(k,k_e) - (thisk_ke+thisk_k)/Deltax^2;
+        A(k,k_w) = A(k,k_w) - (thisk_kw+thisk_k)/Deltax^2;
+        A(k,k_n) = A(k,k_n) - (thisk_kn+thisk_k)/Deltay^2;
+        A(k,k_s) = A(k,k_s) - (thisk_ks+thisk_k)/Deltay^2;
+        %
+        Q(k) = (q3prime(k) - heatremoval)/1E4;
+    end
+end
+
+% Center Boundary
+i = 1;
+j = 1;
+k = pmap(i, j, j_max); % what node #
+k_e = k + 1;
+k_s = k + i_max;
+k_n = k_e;
+k_w = k_s;
+
+% thisMat = Domain(k); % what material
+% matnum = mat(k); % what material
+thisk_k = M{mat(k)}.k;
+thisk_ke = M{mat(k_e)}.k;
+thisk_kw = M{mat(k_w)}.k;
+thisk_kn = M{mat(k_n)}.k;
+thisk_ks = M{mat(k_s)}.k;
+% thisrhoc_p = M{mat(k)}.rhoCp;
+
+if mat(k) == 1 % Fuel
+    heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
+else
+    heatremoval = MOD_rhoc_p*dTdz*w(k);
+end
+
+% pointer mapping goes row-by-row to assemble Coeff. Matrix
+A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
+A(k,k_e) = A(k,k_e) - (thisk_ke+thisk_k)/Deltax^2;
+A(k,k_w) = A(k,k_w) - (thisk_kw+thisk_k)/Deltax^2;
+A(k,k_n) = A(k,k_n) - (thisk_kn+thisk_k)/Deltay^2;
+A(k,k_s) = A(k,k_s) - (thisk_ks+thisk_k)/Deltay^2;
+%
+Q(k) = (q3prime(k) - heatremoval)/1E4;
+
+fprintf('Solving for %i degrees of freedom...\n', i_max*j_max);
+T = A\Q; % Axial Flow Field [cm/s] -> forms a heat removal term
+fprintf('Complete!\n');
+TPlot = reshape(T, i_max, j_max);
+figure(1);
+surf(x, y, TPlot)
+ylabel('y');
+xlabel('x');
+title('Temperature Surface');
+drawnow;
 
 %% Functions
 % ------------------------------------------------------------------------------
