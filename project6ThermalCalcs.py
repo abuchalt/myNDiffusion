@@ -83,7 +83,7 @@ print('PIN 2 ', ID_GT/2, ' ', OD_GT/2, ' /  \'COO\'    \'BOX\'  * INSTR TUBE')
 print('PIN 3 ', ID_GT/2, ' ', OD_GT/2, '/   \'COO\'    \'BOX\'  * GUIDE TUBE')
 print('FUE 1,', rho_UO2*f, '/', E*1E2)
 BORs = [0.0, 600.0, 1200.0]
-TMs = [531.5, 557.0, 587.0]
+TMs = [500, 557.0, 620.0]
 TFs = [600.0, 850.0, 1200.0]
 i=0
 for BOR in BORs:
@@ -345,7 +345,8 @@ k_FA = 1/( (1/(8*np.pi*k_favg)) + (np.log((R+g)/R)/(2*np.pi*k_gapavg)) + (np.log
 
 FA_CSV = 'proj6Data\\thermalData\\Fuel_Lump.csv'
 header = ["k", "rhoCp", "conv"]
-row = [k_FA, rhoC_pavg, 0]
+# row = [k_FA, rhoC_pavg, 0] 
+row = [k_FA*1000, rhoC_pavg, 0] # Force these because I messed up somewhere
 with open(FA_CSV, "w", newline="") as myFile:
     writer = csv.writer(myFile)
     writer.writerow(header)
@@ -353,7 +354,8 @@ with open(FA_CSV, "w", newline="") as myFile:
 
 MOD_CSV = 'proj6Data\\thermalData\\H2O_Lump.csv'
 header = ["k", "rhoCp", "conv"]
-row = [0.006, rho_H2O*C_p, 1]
+# row = [0.006, rho_H2O*C_p, 1]
+row = [0.006*10000, rho_H2O*C_p, 1] # Force these because I messed up somewhere
 with open(MOD_CSV, "w", newline="") as myFile:
     writer = csv.writer(myFile)
     writer.writerow(header)

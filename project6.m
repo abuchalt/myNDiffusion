@@ -102,7 +102,7 @@ fuelLength = 78.74*2.54; % Active Height [in -> cm]
 pitch_Assy = 8.466*2.54; % Assembly Pitch [in -> cm]
 totLinPwr = totPwr/fuelLength; % Total Linear Heat Generation [W/cm]
 % myVel = 2.7*12*2.54; % Average in-core flow velocity [ft/s -> cm/s]
-myVel = 0.7*12*2.54;
+myVel = 2.1*12*2.54;
 T_in = (497-32)*(5/9) + 273.15; % Inlet Temperature [F->K]
 T_out = (597-32)*(5/9) + 273.15; % Outlet Temperature [F->K]
 
@@ -702,7 +702,7 @@ while (residual > epsilon)
     residual = residual/(i_max*j_max); % Normalize for DOF
 
     % Plot solution
-    if mod(iter,10) == 0
+    if mod(iter,100) == 0
         mygroup = G; % Look at slowest group because characteristic features
         slowPlot = reshape(phi(1+(mygroup-1)*i_max*j_max:mygroup*i_max*j_max), i_max, j_max);
         % slowPlot = reshape(phi(1:i_max*j_max), i_max, j_max) + reshape(phi(1+i_max*j_max:2*i_max*j_max), i_max, j_max);
@@ -739,6 +739,7 @@ fprintf('\n---Solving for Temperature Profile---\n');
 MOD_rhoc_p = M{2}.rhoCp;
 dTdz = (T_out-T_in)/fuelLength;
 % h = 0.05;
+h = 3.0;
 
 % Define Matrices
 fprintf('Building Matrices...\n');
@@ -762,63 +763,70 @@ for i = 2:i_max-1
 
         if mat(k) == 1 % Fuel
             heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
-            % if mat(k_e) == 2
-            %     flux_e = h/Deltax;
-            % else
-            %     flux_e = (thisk_ke+thisk_k)/Deltax^2;
-            % end
-            % if mat(k_w) == 2
-            %     flux_w = h/Deltax;
-            % else
-            %     flux_w = (thisk_kw+thisk_k)/Deltax^2;
-            % end
-            % if mat(k_n) == 2
-            %     flux_n = h/Deltay;
-            % else
-            %     flux_n = (thisk_kn+thisk_k)/Deltay^2;
-            % end
-            % if mat(k_s) == 2
-            %     flux_s = h/Deltay;
-            % else
-            %     flux_s = (thisk_ks+thisk_k)/Deltay^2;
-            % end
+            if mat(k_e) == 2
+                flux_e = h/Deltax;
+                % heatremoval = heatremoval - h*T_infty/Deltax;
+            else
+                flux_e = (thisk_ke+thisk_k)/Deltax^2;
+            end
+            if mat(k_w) == 2
+                flux_w = h/Deltax;
+                % heatremoval = heatremoval - h*T_infty/Deltax;
+            else
+                flux_w = (thisk_kw+thisk_k)/Deltax^2;
+            end
+            if mat(k_n) == 2
+                flux_n = h/Deltay;
+                % heatremoval = heatremoval - h*T_infty/Deltay;
+            else
+                flux_n = (thisk_kn+thisk_k)/Deltay^2;
+            end
+            if mat(k_s) == 2
+                flux_s = h/Deltay;
+                % heatremoval = heatremoval - h*T_infty/Deltay;
+            else
+                flux_s = (thisk_ks+thisk_k)/Deltay^2;
+            end
         else
+            % A(k,k) = 1.0;
+            % Q(k) = T_infty;
             heatremoval = MOD_rhoc_p*dTdz*w(k);
-            % if mat(k_e) == 1
-            %     flux_e = h/Deltax;
-            % else
-            %     flux_e = (thisk_ke+thisk_k)/Deltax^2;
-            % end
-            % if mat(k_w) == 1
-            %     flux_w = h/Deltax;
-            % else
-            %     flux_w = (thisk_kw+thisk_k)/Deltax^2;
-            % end
-            % if mat(k_n) == 1
-            %     flux_n = h/Deltay;
-            % else
-            %     flux_n = (thisk_kn+thisk_k)/Deltay^2;
-            % end
-            % if mat(k_s) == 1
-            %     flux_s = h/Deltay;
-            % else
-            %     flux_s = (thisk_ks+thisk_k)/Deltay^2;
-            % end
+            if mat(k_e) == 1
+                flux_e = h/Deltax;
+            else
+                flux_e = (thisk_ke+thisk_k)/Deltax^2;
+            end
+            if mat(k_w) == 1
+                flux_w = h/Deltax;
+            else
+                flux_w = (thisk_kw+thisk_k)/Deltax^2;
+            end
+            if mat(k_n) == 1
+                flux_n = h/Deltay;
+            else
+                flux_n = (thisk_kn+thisk_k)/Deltay^2;
+            end
+            if mat(k_s) == 1
+                flux_s = h/Deltay;
+            else
+                flux_s = (thisk_ks+thisk_k)/Deltay^2;
+            end
         end
-        % A(k,k) = flux_e + flux_w + flux_n + flux_s;
-        % A(k,k_e) = -flux_e;
-        % A(k,k_w) = -flux_w;
-        % A(k,k_n) = -flux_n;
-        % A(k,k_s) = -flux_s;
+        A(k,k) = flux_e + flux_w + flux_n + flux_s;
+        A(k,k_e) = A(k,k_e) - flux_e;
+        A(k,k_w) = A(k,k_w) - flux_w;
+        A(k,k_n) = A(k,k_n) - flux_n;
+        A(k,k_s) = A(k,k_s) - flux_s;
+        Q(k) = (q3prime(k) - heatremoval);
 
         % pointer mapping goes row-by-row to assemble Coeff. Matrix
-        A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
-        A(k,k_e) = -(thisk_ke+thisk_k)/Deltax^2;
-        A(k,k_w) = -(thisk_kw+thisk_k)/Deltax^2;
-        A(k,k_n) = -(thisk_kn+thisk_k)/Deltay^2;
-        A(k,k_s) = -(thisk_ks+thisk_k)/Deltay^2;
-        %
-        Q(k) = (q3prime(k) - heatremoval)/1E4;
+        % A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
+        % A(k,k_e) = -(thisk_ke+thisk_k)/Deltax^2;
+        % A(k,k_w) = -(thisk_kw+thisk_k)/Deltax^2;
+        % A(k,k_n) = -(thisk_kn+thisk_k)/Deltay^2;
+        % A(k,k_s) = -(thisk_ks+thisk_k)/Deltay^2;
+        % %
+        % Q(k) = (q3prime(k) - heatremoval)/1E4;
     end
 end
 
@@ -844,63 +852,70 @@ for i = 2:i_max-1 % Avoid corners
 
         if mat(k) == 1 % Fuel
             heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
-            % if mat(k_e) == 2
-            %     flux_e = h/Deltax;
-            % else
-            %     flux_e = (thisk_ke+thisk_k)/Deltax^2;
-            % end
-            % if mat(k_w) == 2
-            %     flux_w = h/Deltax;
-            % else
-            %     flux_w = (thisk_kw+thisk_k)/Deltax^2;
-            % end
-            % if mat(k_n) == 2
-            %     flux_n = h/Deltay;
-            % else
-            %     flux_n = (thisk_kn+thisk_k)/Deltay^2;
-            % end
-            % if mat(k_s) == 2
-            %     flux_s = h/Deltay;
-            % else
-            %     flux_s = (thisk_ks+thisk_k)/Deltay^2;
-            % end
+            if mat(k_e) == 2
+                flux_e = h/Deltax;
+                % heatremoval = heatremoval - h*T_infty/Deltax;
+            else
+                flux_e = (thisk_ke+thisk_k)/Deltax^2;
+            end
+            if mat(k_w) == 2
+                flux_w = h/Deltax;
+                % heatremoval = heatremoval - h*T_infty/Deltax;
+            else
+                flux_w = (thisk_kw+thisk_k)/Deltax^2;
+            end
+            if mat(k_n) == 2
+                flux_n = h/Deltay;
+                % heatremoval = heatremoval - h*T_infty/Deltay;
+            else
+                flux_n = (thisk_kn+thisk_k)/Deltay^2;
+            end
+            if mat(k_s) == 2
+                flux_s = h/Deltay;
+                % heatremoval = heatremoval - h*T_infty/Deltay;
+            else
+                flux_s = (thisk_ks+thisk_k)/Deltay^2;
+            end
         else
+            % A(k,k) = 1.0;
+            % Q(k) = T_infty;
             heatremoval = MOD_rhoc_p*dTdz*w(k);
-            % if mat(k_e) == 1
-            %     flux_e = h/Deltax;
-            % else
-            %     flux_e = (thisk_ke+thisk_k)/Deltax^2;
-            % end
-            % if mat(k_w) == 1
-            %     flux_w = h/Deltax;
-            % else
-            %     flux_w = (thisk_kw+thisk_k)/Deltax^2;
-            % end
-            % if mat(k_n) == 1
-            %     flux_n = h/Deltay;
-            % else
-            %     flux_n = (thisk_kn+thisk_k)/Deltay^2;
-            % end
-            % if mat(k_s) == 1
-            %     flux_s = h/Deltay;
-            % else
-            %     flux_s = (thisk_ks+thisk_k)/Deltay^2;
-            % end
+            if mat(k_e) == 1
+                flux_e = h/Deltax;
+            else
+                flux_e = (thisk_ke+thisk_k)/Deltax^2;
+            end
+            if mat(k_w) == 1
+                flux_w = h/Deltax;
+            else
+                flux_w = (thisk_kw+thisk_k)/Deltax^2;
+            end
+            if mat(k_n) == 1
+                flux_n = h/Deltay;
+            else
+                flux_n = (thisk_kn+thisk_k)/Deltay^2;
+            end
+            if mat(k_s) == 1
+                flux_s = h/Deltay;
+            else
+                flux_s = (thisk_ks+thisk_k)/Deltay^2;
+            end
         end
-        % A(k,k) = flux_e + flux_w + flux_n + flux_s;
-        % A(k,k_e) = A(k,k_e) - flux_e;
-        % A(k,k_w) = A(k,k_w) - flux_w;
-        % A(k,k_n) = A(k,k_n) - flux_n;
-        % A(k,k_s) = A(k,k_s) - flux_s;
+        A(k,k) = flux_e + flux_w + flux_n + flux_s;
+        A(k,k_e) = A(k,k_e) - flux_e;
+        A(k,k_w) = A(k,k_w) - flux_w;
+        A(k,k_n) = A(k,k_n) - flux_n;
+        A(k,k_s) = A(k,k_s) - flux_s;
+        Q(k) = (q3prime(k) - heatremoval);
 
         % pointer mapping goes row-by-row to assemble Coeff. Matrix
-        A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
-        A(k,k_e) = A(k,k_e) - (thisk_ke+thisk_k)/Deltax^2;
-        A(k,k_w) = A(k,k_w) - (thisk_kw+thisk_k)/Deltax^2;
-        A(k,k_n) = A(k,k_n) - (thisk_kn+thisk_k)/Deltay^2;
-        A(k,k_s) = A(k,k_s) - (thisk_ks+thisk_k)/Deltay^2;
+        % A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
+        % A(k,k_e) = A(k,k_e) - (thisk_ke+thisk_k)/Deltax^2;
+        % A(k,k_w) = A(k,k_w) - (thisk_kw+thisk_k)/Deltax^2;
+        % A(k,k_n) = A(k,k_n) - (thisk_kn+thisk_k)/Deltay^2;
+        % A(k,k_s) = A(k,k_s) - (thisk_ks+thisk_k)/Deltay^2;
         %
-        Q(k) = (q3prime(k) - heatremoval)/1E4;
+        % Q(k) = (q3prime(k) - heatremoval)/1E4;
     end
 end
 % Right BC
@@ -919,6 +934,7 @@ for i = i_max:i_max
         Q(k) = T_infty;
     end
 end
+
 % Top BC
 for i = 1:1
     for j = 2:j_max-1 % Avoid corners
@@ -940,63 +956,70 @@ for i = 1:1
 
         if mat(k) == 1 % Fuel
             heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
-            % if mat(k_e) == 2
-            %     flux_e = h/Deltax;
-            % else
-            %     flux_e = (thisk_ke+thisk_k)/Deltax^2;
-            % end
-            % if mat(k_w) == 2
-            %     flux_w = h/Deltax;
-            % else
-            %     flux_w = (thisk_kw+thisk_k)/Deltax^2;
-            % end
-            % if mat(k_n) == 2
-            %     flux_n = h/Deltay;
-            % else
-            %     flux_n = (thisk_kn+thisk_k)/Deltay^2;
-            % end
-            % if mat(k_s) == 2
-            %     flux_s = h/Deltay;
-            % else
-            %     flux_s = (thisk_ks+thisk_k)/Deltay^2;
-            % end
+            if mat(k_e) == 2
+                flux_e = h/Deltax;
+                % heatremoval = heatremoval - h*T_infty/Deltax;
+            else
+                flux_e = (thisk_ke+thisk_k)/Deltax^2;
+            end
+            if mat(k_w) == 2
+                flux_w = h/Deltax;
+                % heatremoval = heatremoval - h*T_infty/Deltax;
+            else
+                flux_w = (thisk_kw+thisk_k)/Deltax^2;
+            end
+            if mat(k_n) == 2
+                flux_n = h/Deltay;
+                % heatremoval = heatremoval - h*T_infty/Deltay;
+            else
+                flux_n = (thisk_kn+thisk_k)/Deltay^2;
+            end
+            if mat(k_s) == 2
+                flux_s = h/Deltay;
+                % heatremoval = heatremoval - h*T_infty/Deltay;
+            else
+                flux_s = (thisk_ks+thisk_k)/Deltay^2;
+            end
         else
+            % A(k,k) = 1.0;
+            % Q(k) = T_infty;
             heatremoval = MOD_rhoc_p*dTdz*w(k);
-            % if mat(k_e) == 1
-            %     flux_e = h/Deltax;
-            % else
-            %     flux_e = (thisk_ke+thisk_k)/Deltax^2;
-            % end
-            % if mat(k_w) == 1
-            %     flux_w = h/Deltax;
-            % else
-            %     flux_w = (thisk_kw+thisk_k)/Deltax^2;
-            % end
-            % if mat(k_n) == 1
-            %     flux_n = h/Deltay;
-            % else
-            %     flux_n = (thisk_kn+thisk_k)/Deltay^2;
-            % end
-            % if mat(k_s) == 1
-            %     flux_s = h/Deltay;
-            % else
-            %     flux_s = (thisk_ks+thisk_k)/Deltay^2;
-            % end
+            if mat(k_e) == 1
+                flux_e = h/Deltax;
+            else
+                flux_e = (thisk_ke+thisk_k)/Deltax^2;
+            end
+            if mat(k_w) == 1
+                flux_w = h/Deltax;
+            else
+                flux_w = (thisk_kw+thisk_k)/Deltax^2;
+            end
+            if mat(k_n) == 1
+                flux_n = h/Deltay;
+            else
+                flux_n = (thisk_kn+thisk_k)/Deltay^2;
+            end
+            if mat(k_s) == 1
+                flux_s = h/Deltay;
+            else
+                flux_s = (thisk_ks+thisk_k)/Deltay^2;
+            end
         end
-        % A(k,k) = flux_e + flux_w + flux_n + flux_s;
-        % A(k,k_e) = A(k,k_e) - flux_e;
-        % A(k,k_w) = A(k,k_w) - flux_w;
-        % A(k,k_n) = A(k,k_n) - flux_n;
-        % A(k,k_s) = A(k,k_s) - flux_s;
+        A(k,k) = flux_e + flux_w + flux_n + flux_s;
+        A(k,k_e) = A(k,k_e) - flux_e;
+        A(k,k_w) = A(k,k_w) - flux_w;
+        A(k,k_n) = A(k,k_n) - flux_n;
+        A(k,k_s) = A(k,k_s) - flux_s;
+        Q(k) = (q3prime(k) - heatremoval);
 
         % pointer mapping goes row-by-row to assemble Coeff. Matrix
-        A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
-        A(k,k_e) = A(k,k_e) - (thisk_ke+thisk_k)/Deltax^2;
-        A(k,k_w) = A(k,k_w) - (thisk_kw+thisk_k)/Deltax^2;
-        A(k,k_n) = A(k,k_n) - (thisk_kn+thisk_k)/Deltay^2;
-        A(k,k_s) = A(k,k_s) - (thisk_ks+thisk_k)/Deltay^2;
+        % A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
+        % A(k,k_e) = A(k,k_e) - (thisk_ke+thisk_k)/Deltax^2;
+        % A(k,k_w) = A(k,k_w) - (thisk_kw+thisk_k)/Deltax^2;
+        % A(k,k_n) = A(k,k_n) - (thisk_kn+thisk_k)/Deltay^2;
+        % A(k,k_s) = A(k,k_s) - (thisk_ks+thisk_k)/Deltay^2;
         %
-        Q(k) = (q3prime(k) - heatremoval)/1E4;
+        % Q(k) = (q3prime(k) - heatremoval)/1E4;
     end
 end
 
@@ -1020,63 +1043,70 @@ thisk_ks = M{mat(k_s)}.k;
 
 if mat(k) == 1 % Fuel
     heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
-    % if mat(k_e) == 2
-    %     flux_e = h/Deltax;
-    % else
-    %     flux_e = (thisk_ke+thisk_k)/Deltax^2;
-    % end
-    % if mat(k_w) == 2
-    %     flux_w = h/Deltax;
-    % else
-    %     flux_w = (thisk_kw+thisk_k)/Deltax^2;
-    % end
-    % if mat(k_n) == 2
-    %     flux_n = h/Deltay;
-    % else
-    %     flux_n = (thisk_kn+thisk_k)/Deltay^2;
-    % end
-    % if mat(k_s) == 2
-    %     flux_s = h/Deltay;
-    % else
-    %     flux_s = (thisk_ks+thisk_k)/Deltay^2;
-    % end
+    if mat(k_e) == 2
+        flux_e = h/Deltax;
+        % heatremoval = heatremoval - h*T_infty/Deltax;
+    else
+        flux_e = (thisk_ke+thisk_k)/Deltax^2;
+    end
+    if mat(k_w) == 2
+        flux_w = h/Deltax;
+        % heatremoval = heatremoval - h*T_infty/Deltax;
+    else
+        flux_w = (thisk_kw+thisk_k)/Deltax^2;
+    end
+    if mat(k_n) == 2
+        flux_n = h/Deltay;
+        % heatremoval = heatremoval - h*T_infty/Deltay;
+    else
+        flux_n = (thisk_kn+thisk_k)/Deltay^2;
+    end
+    if mat(k_s) == 2
+        flux_s = h/Deltay;
+        % heatremoval = heatremoval - h*T_infty/Deltay;
+    else
+        flux_s = (thisk_ks+thisk_k)/Deltay^2;
+    end
 else
+    % A(k,k) = 1.0;
+    % Q(k) = T_infty;
     heatremoval = MOD_rhoc_p*dTdz*w(k);
-    % if mat(k_e) == 1
-    %     flux_e = h/Deltax;
-    % else
-    %     flux_e = (thisk_ke+thisk_k)/Deltax^2;
-    % end
-    % if mat(k_w) == 1
-    %     flux_w = h/Deltax;
-    % else
-    %     flux_w = (thisk_kw+thisk_k)/Deltax^2;
-    % end
-    % if mat(k_n) == 1
-    %     flux_n = h/Deltay;
-    % else
-    %     flux_n = (thisk_kn+thisk_k)/Deltay^2;
-    % end
-    % if mat(k_s) == 1
-    %     flux_s = h/Deltay;
-    % else
-    %     flux_s = (thisk_ks+thisk_k)/Deltay^2;
-    % end
+    if mat(k_e) == 1
+        flux_e = h/Deltax;
+    else
+        flux_e = (thisk_ke+thisk_k)/Deltax^2;
+    end
+    if mat(k_w) == 1
+        flux_w = h/Deltax;
+    else
+        flux_w = (thisk_kw+thisk_k)/Deltax^2;
+    end
+    if mat(k_n) == 1
+        flux_n = h/Deltay;
+    else
+        flux_n = (thisk_kn+thisk_k)/Deltay^2;
+    end
+    if mat(k_s) == 1
+        flux_s = h/Deltay;
+    else
+        flux_s = (thisk_ks+thisk_k)/Deltay^2;
+    end
 end
-% A(k,k) = flux_e + flux_w + flux_n + flux_s;
-% A(k,k_e) = A(k,k_e) - flux_e;
-% A(k,k_w) = A(k,k_w) - flux_w;
-% A(k,k_n) = A(k,k_n) - flux_n;
-% A(k,k_s) = A(k,k_s) - flux_s;
+A(k,k) = flux_e + flux_w + flux_n + flux_s;
+A(k,k_e) = A(k,k_e) - flux_e;
+A(k,k_w) = A(k,k_w) - flux_w;
+A(k,k_n) = A(k,k_n) - flux_n;
+A(k,k_s) = A(k,k_s) - flux_s;
+Q(k) = (q3prime(k) - heatremoval);
 
 % pointer mapping goes row-by-row to assemble Coeff. Matrix
-A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
-A(k,k_e) = A(k,k_e) - (thisk_ke+thisk_k)/Deltax^2;
-A(k,k_w) = A(k,k_w) - (thisk_kw+thisk_k)/Deltax^2;
-A(k,k_n) = A(k,k_n) - (thisk_kn+thisk_k)/Deltay^2;
-A(k,k_s) = A(k,k_s) - (thisk_ks+thisk_k)/Deltay^2;
-%
-Q(k) = (q3prime(k) - heatremoval)/1E4;
+% A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
+% A(k,k_e) = A(k,k_e) - (thisk_ke+thisk_k)/Deltax^2;
+% A(k,k_w) = A(k,k_w) - (thisk_kw+thisk_k)/Deltax^2;
+% A(k,k_n) = A(k,k_n) - (thisk_kn+thisk_k)/Deltay^2;
+% A(k,k_s) = A(k,k_s) - (thisk_ks+thisk_k)/Deltay^2;
+% %
+% Q(k) = (q3prime(k) - heatremoval)/1E4;
 
 fprintf('Solving for %i degrees of freedom...\n', i_max*j_max);
 T = A\Q; % Axial Flow Field [cm/s] -> forms a heat removal term
