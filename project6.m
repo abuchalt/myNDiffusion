@@ -738,6 +738,7 @@ q3prime = (totLinPwr/4)*q3prime/(sum(q3prime,'all')*Deltax*Deltay);
 fprintf('\n---Solving for Temperature Profile---\n');
 MOD_rhoc_p = M{2}.rhoCp;
 dTdz = (T_out-T_in)/fuelLength;
+% h = 0.05;
 
 % Define Matrices
 fprintf('Building Matrices...\n');
@@ -761,9 +762,54 @@ for i = 2:i_max-1
 
         if mat(k) == 1 % Fuel
             heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
+            % if mat(k_e) == 2
+            %     flux_e = h/Deltax;
+            % else
+            %     flux_e = (thisk_ke+thisk_k)/Deltax^2;
+            % end
+            % if mat(k_w) == 2
+            %     flux_w = h/Deltax;
+            % else
+            %     flux_w = (thisk_kw+thisk_k)/Deltax^2;
+            % end
+            % if mat(k_n) == 2
+            %     flux_n = h/Deltay;
+            % else
+            %     flux_n = (thisk_kn+thisk_k)/Deltay^2;
+            % end
+            % if mat(k_s) == 2
+            %     flux_s = h/Deltay;
+            % else
+            %     flux_s = (thisk_ks+thisk_k)/Deltay^2;
+            % end
         else
             heatremoval = MOD_rhoc_p*dTdz*w(k);
+            % if mat(k_e) == 1
+            %     flux_e = h/Deltax;
+            % else
+            %     flux_e = (thisk_ke+thisk_k)/Deltax^2;
+            % end
+            % if mat(k_w) == 1
+            %     flux_w = h/Deltax;
+            % else
+            %     flux_w = (thisk_kw+thisk_k)/Deltax^2;
+            % end
+            % if mat(k_n) == 1
+            %     flux_n = h/Deltay;
+            % else
+            %     flux_n = (thisk_kn+thisk_k)/Deltay^2;
+            % end
+            % if mat(k_s) == 1
+            %     flux_s = h/Deltay;
+            % else
+            %     flux_s = (thisk_ks+thisk_k)/Deltay^2;
+            % end
         end
+        % A(k,k) = flux_e + flux_w + flux_n + flux_s;
+        % A(k,k_e) = -flux_e;
+        % A(k,k_w) = -flux_w;
+        % A(k,k_n) = -flux_n;
+        % A(k,k_s) = -flux_s;
 
         % pointer mapping goes row-by-row to assemble Coeff. Matrix
         A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
@@ -798,9 +844,54 @@ for i = 2:i_max-1 % Avoid corners
 
         if mat(k) == 1 % Fuel
             heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
+            % if mat(k_e) == 2
+            %     flux_e = h/Deltax;
+            % else
+            %     flux_e = (thisk_ke+thisk_k)/Deltax^2;
+            % end
+            % if mat(k_w) == 2
+            %     flux_w = h/Deltax;
+            % else
+            %     flux_w = (thisk_kw+thisk_k)/Deltax^2;
+            % end
+            % if mat(k_n) == 2
+            %     flux_n = h/Deltay;
+            % else
+            %     flux_n = (thisk_kn+thisk_k)/Deltay^2;
+            % end
+            % if mat(k_s) == 2
+            %     flux_s = h/Deltay;
+            % else
+            %     flux_s = (thisk_ks+thisk_k)/Deltay^2;
+            % end
         else
             heatremoval = MOD_rhoc_p*dTdz*w(k);
+            % if mat(k_e) == 1
+            %     flux_e = h/Deltax;
+            % else
+            %     flux_e = (thisk_ke+thisk_k)/Deltax^2;
+            % end
+            % if mat(k_w) == 1
+            %     flux_w = h/Deltax;
+            % else
+            %     flux_w = (thisk_kw+thisk_k)/Deltax^2;
+            % end
+            % if mat(k_n) == 1
+            %     flux_n = h/Deltay;
+            % else
+            %     flux_n = (thisk_kn+thisk_k)/Deltay^2;
+            % end
+            % if mat(k_s) == 1
+            %     flux_s = h/Deltay;
+            % else
+            %     flux_s = (thisk_ks+thisk_k)/Deltay^2;
+            % end
         end
+        % A(k,k) = flux_e + flux_w + flux_n + flux_s;
+        % A(k,k_e) = A(k,k_e) - flux_e;
+        % A(k,k_w) = A(k,k_w) - flux_w;
+        % A(k,k_n) = A(k,k_n) - flux_n;
+        % A(k,k_s) = A(k,k_s) - flux_s;
 
         % pointer mapping goes row-by-row to assemble Coeff. Matrix
         A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
@@ -849,9 +940,54 @@ for i = 1:1
 
         if mat(k) == 1 % Fuel
             heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
+            % if mat(k_e) == 2
+            %     flux_e = h/Deltax;
+            % else
+            %     flux_e = (thisk_ke+thisk_k)/Deltax^2;
+            % end
+            % if mat(k_w) == 2
+            %     flux_w = h/Deltax;
+            % else
+            %     flux_w = (thisk_kw+thisk_k)/Deltax^2;
+            % end
+            % if mat(k_n) == 2
+            %     flux_n = h/Deltay;
+            % else
+            %     flux_n = (thisk_kn+thisk_k)/Deltay^2;
+            % end
+            % if mat(k_s) == 2
+            %     flux_s = h/Deltay;
+            % else
+            %     flux_s = (thisk_ks+thisk_k)/Deltay^2;
+            % end
         else
             heatremoval = MOD_rhoc_p*dTdz*w(k);
+            % if mat(k_e) == 1
+            %     flux_e = h/Deltax;
+            % else
+            %     flux_e = (thisk_ke+thisk_k)/Deltax^2;
+            % end
+            % if mat(k_w) == 1
+            %     flux_w = h/Deltax;
+            % else
+            %     flux_w = (thisk_kw+thisk_k)/Deltax^2;
+            % end
+            % if mat(k_n) == 1
+            %     flux_n = h/Deltay;
+            % else
+            %     flux_n = (thisk_kn+thisk_k)/Deltay^2;
+            % end
+            % if mat(k_s) == 1
+            %     flux_s = h/Deltay;
+            % else
+            %     flux_s = (thisk_ks+thisk_k)/Deltay^2;
+            % end
         end
+        % A(k,k) = flux_e + flux_w + flux_n + flux_s;
+        % A(k,k_e) = A(k,k_e) - flux_e;
+        % A(k,k_w) = A(k,k_w) - flux_w;
+        % A(k,k_n) = A(k,k_n) - flux_n;
+        % A(k,k_s) = A(k,k_s) - flux_s;
 
         % pointer mapping goes row-by-row to assemble Coeff. Matrix
         A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
@@ -884,9 +1020,54 @@ thisk_ks = M{mat(k_s)}.k;
 
 if mat(k) == 1 % Fuel
     heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
+    % if mat(k_e) == 2
+    %     flux_e = h/Deltax;
+    % else
+    %     flux_e = (thisk_ke+thisk_k)/Deltax^2;
+    % end
+    % if mat(k_w) == 2
+    %     flux_w = h/Deltax;
+    % else
+    %     flux_w = (thisk_kw+thisk_k)/Deltax^2;
+    % end
+    % if mat(k_n) == 2
+    %     flux_n = h/Deltay;
+    % else
+    %     flux_n = (thisk_kn+thisk_k)/Deltay^2;
+    % end
+    % if mat(k_s) == 2
+    %     flux_s = h/Deltay;
+    % else
+    %     flux_s = (thisk_ks+thisk_k)/Deltay^2;
+    % end
 else
     heatremoval = MOD_rhoc_p*dTdz*w(k);
+    % if mat(k_e) == 1
+    %     flux_e = h/Deltax;
+    % else
+    %     flux_e = (thisk_ke+thisk_k)/Deltax^2;
+    % end
+    % if mat(k_w) == 1
+    %     flux_w = h/Deltax;
+    % else
+    %     flux_w = (thisk_kw+thisk_k)/Deltax^2;
+    % end
+    % if mat(k_n) == 1
+    %     flux_n = h/Deltay;
+    % else
+    %     flux_n = (thisk_kn+thisk_k)/Deltay^2;
+    % end
+    % if mat(k_s) == 1
+    %     flux_s = h/Deltay;
+    % else
+    %     flux_s = (thisk_ks+thisk_k)/Deltay^2;
+    % end
 end
+% A(k,k) = flux_e + flux_w + flux_n + flux_s;
+% A(k,k_e) = A(k,k_e) - flux_e;
+% A(k,k_w) = A(k,k_w) - flux_w;
+% A(k,k_n) = A(k,k_n) - flux_n;
+% A(k,k_s) = A(k,k_s) - flux_s;
 
 % pointer mapping goes row-by-row to assemble Coeff. Matrix
 A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
