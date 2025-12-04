@@ -127,7 +127,10 @@ TF_nom = 850.0; % Nominal Fuel Temperature [K]
 TM_nom = 557.0; % Nominal Moderator Temperature [K]
 TFUL = TF_nom;
 TMOD = TM_nom;
-myBOR = 600.0; % Init Soluble Poison Concentration [ppm]
+
+myBORHi = 4780.7;
+myBORLo = 4780.706;
+myBOR = 4780.703; % Soluble Poison Concentration [ppm]
 
 %% Intelligently Find Smallest Diffusion Length for Resolution-Setting
 % ------------------------------------------------------------------------------
@@ -206,10 +209,6 @@ end
 T_infty = TM_nom; % [K]
 
 G = 2; % Number of energy groups
-
-% Define variables for power-iteration
-residual = 1.0E5; % init residual
-epsilon = 1.0E-16; % drive residual down to this value before terminating
 
 % % Define time stepping
 % Deltat = 1; % [s]
@@ -398,17 +397,10 @@ fprintf('Complete!\n');
 
 clear A S
 
-%% Iterative Solver: Neutronics
+%% Iterative Solver
 % ------------------------------------------------------------------------------
 fprintf('\n===ITERATIVE SOLVER===\n');
 fprintf('Initializing...\n');
-% Init Thermal Matrices
-A = spalloc(i_max*j_max, i_max*j_max, 5*i_max*j_max); % Sparsely allocate Diffusion Operator with 5 bands
-Q = zeros(i_max*j_max, 1); % Allocate Heat Source/Removal Vector
-% Init Neutronics Matrices
-H = spalloc(G*i_max*j_max, G*i_max*j_max, 5*G*i_max*j_max); % Sparsely allocate Streaming/Absorption Operator with 5 bands for each energy group
-S = spalloc(G*i_max*j_max, G*i_max*j_max, (G-1)*i_max*j_max); % Sparsely allocate Scattering Source Operator with bands for up/downscatter
-F = spalloc(G*i_max*j_max, G*i_max*j_max, 1*G*i_max*j_max); % Sparsely allocate Fission Source Operator with 1 band for each energy group
 
 % Init Solution Variables (1D because we use pointer mapping)
 T = zeros(i_max*j_max,1);
@@ -436,19 +428,216 @@ for i = 1:i_max
     end
 end
 
-fprintf('\n---Solving for Neutron Flux Profile---\n');
+keff_iter = 2.0;
+kEpsilon = 0.00001;
 
-% Define Matrices
-fprintf('Building Matrices...\n');
-for i = 2:i_max-1
-    for j = 2:j_max-1
+while abs(keff_iter - 1.0) > kEpsilon
+% for bigBigIter = 1:10
+    myBOR = (myBORHi + myBORLo)/2.0;
+
+    iter=2;
+
+    while (iter>1)
+    % for bigIter = 1:10
+        %% Iterative Solver: Neutronics
+        % ------------------------------------------------------------------------------
+
+        fprintf('\n---Solving for Neutron Flux Profile---\n');
+
+        % Define Matrices
+        fprintf('Building Matrices...\n');
+
+        % Init Neutronics Matrices
+        H = spalloc(G*i_max*j_max, G*i_max*j_max, 5*G*i_max*j_max); % Sparsely allocate Streaming/Absorption Operator with 5 bands for each energy group
+        S = spalloc(G*i_max*j_max, G*i_max*j_max, (G-1)*i_max*j_max); % Sparsely allocate Scattering Source Operator with bands for up/downscatter
+        F = spalloc(G*i_max*j_max, G*i_max*j_max, 1*G*i_max*j_max); % Sparsely allocate Fission Source Operator with 1 band for each energy group
+
+        for i = 2:i_max-1
+            for j = 2:j_max-1
+                kpos = pmap(i, j, j_max); % what node #
+                for group = 1:G
+                    k = ((group-1)*i_max*j_max) + kpos;
+                    k_e = k + 1;
+                    k_w = k - 1;
+                    k_n = k - j_max;
+                    k_s = k + j_max;
+
+                    thisMat = Domain(i, j);
+                    thisT = T(kpos);
+
+                    if thisMat == 1 % Fuel
+                        thisD = FUL_D(thisT, TMOD, myBOR, group);
+                        thisSig_R = FUL_Sigma_R(thisT, TMOD, myBOR, group);
+                    elseif thisMat == 2 % Moderator
+                        thisD = MOD_D(TFUL, thisT, myBOR, group);
+                        thisSig_R = MOD_Sigma_R(TFUL, thisT, myBOR, group);
+                    end
+
+                    % pointer mapping goes row-by-row to assemble Coeff. Matrix
+                    H(k,k) = L*thisSig_R*(1.0) + (thisD/L)*((2.0/Deltaxbar^2) + (2.0/Deltaybar^2));
+                    H(k,k_e) = H(k,k_e) + (thisD/L)*(-1.0/Deltaxbar^2);
+                    H(k,k_w) = H(k,k_w) + (thisD/L)*(-1.0/Deltaxbar^2);
+                    H(k,k_n) = H(k,k_n) + (thisD/L)*(-1.0/Deltaybar^2);
+                    H(k,k_s) = H(k,k_s) + (thisD/L)*(-1.0/Deltaybar^2);
+
+                    chi_g = CHI(group);
+                    for gprime = 1:G
+                        % tok = kpos + (group-1)*i_max*j_max;
+                        tok = k;
+                        fromk = kpos + (gprime-1)*i_max*j_max;
+                        
+                        if thisMat == 1 % Fuel
+                            nuSig_fgprime = FUL_nuSigma_f(thisT, TMOD, myBOR, gprime);
+                            Sig_sgprimeg = FUL_Sigma_s(thisT, TMOD, myBOR, gprime, group);
+                        elseif thisMat == 2 % Moderator
+                            nuSig_fgprime = MOD_nuSigma_f(TFUL, thisT, myBOR, gprime);
+                            Sig_sgprimeg = MOD_Sigma_s(TFUL, thisT, myBOR, gprime, group);
+                        end 
+
+                        F(tok,fromk) = L*chi_g*nuSig_fgprime*(1.0);
+                        S(tok,fromk) = L*Sig_sgprimeg*(1.0);
+
+                    end
+                end
+            end
+        end
+
+        % Apply BCs
+        % Left BC
+        for i = 2:i_max-1 % Avoid corners
+            for j = 1:1
+                kpos = pmap(i, j, j_max); % what node #
+                kpossym = sympmap(i,j,j_max);
+                for group = 1:G
+                    k = ((group-1)*i_max*j_max) + kpos;
+                    k_e = k + 1;
+                    k_n = k - j_max;
+                    k_s = k + j_max;
+                    k_w = ((group-1)*i_max*j_max) + kpossym + j_max;
+
+                    thisMat = Domain(i, j);
+                    thisT = T(kpos);
+
+                    if thisMat == 1 % Fuel
+                        thisD = FUL_D(thisT, TMOD, myBOR, group);
+                        thisSig_R = FUL_Sigma_R(thisT, TMOD, myBOR, group);
+                    elseif thisMat == 2 % Moderator
+                        thisD = MOD_D(TFUL, thisT, myBOR, group);
+                        thisSig_R = MOD_Sigma_R(TFUL, thisT, myBOR, group);
+                    end
+
+                    % pointer mapping goes row-by-row to assemble Coeff. Matrix
+                    H(k,k) = L*thisSig_R*(1.0) + (thisD/L)*((2.0/Deltaxbar^2) + (2.0/Deltaybar^2));
+                    H(k,k_e) = H(k,k_e) + (thisD/L)*(-1.0/Deltaxbar^2);
+                    H(k,k_w) = H(k,k_w) + (thisD/L)*(-1.0/Deltaxbar^2);
+                    H(k,k_n) = H(k,k_n) + (thisD/L)*(-1.0/Deltaybar^2);
+                    H(k,k_s) = H(k,k_s) + (thisD/L)*(-1.0/Deltaybar^2);
+
+                    chi_g = CHI(group);
+                    for gprime = 1:G
+                        % tok = kpos + (group-1)*i_max*j_max;
+                        tok = k;
+                        fromk = kpos + (gprime-1)*i_max*j_max;
+                        
+                        if thisMat == 1 % Fuel
+                            nuSig_fgprime = FUL_nuSigma_f(thisT, TMOD, myBOR, gprime);
+                            Sig_sgprimeg = FUL_Sigma_s(thisT, TMOD, myBOR, gprime, group);
+                        elseif thisMat == 2 % Moderator
+                            nuSig_fgprime = MOD_nuSigma_f(TFUL, thisT, myBOR, gprime);
+                            Sig_sgprimeg = MOD_Sigma_s(TFUL, thisT, myBOR, gprime, group);
+                        end 
+
+                        F(tok,fromk) = L*chi_g*nuSig_fgprime*(1.0);
+                        S(tok,fromk) = L*Sig_sgprimeg*(1.0);
+
+                    end
+                end
+            end
+        end
+        % Right BC
+        for i = 1:i_max
+            for j = j_max:j_max
+                kpos = pmap(i, j, j_max); % what node #
+                for group = 1:G
+                    k = ((group-1)*i_max*j_max) + kpos;
+                    
+                    H(k,k) = 1.0;
+                end
+            end
+        end
+        % Bottom BC
+        for i = i_max:i_max
+            for j = 1:j_max
+                kpos = pmap(i, j, j_max); % what node #
+                for group = 1:G
+                    k = ((group-1)*i_max*j_max) + kpos;
+
+                    H(k,k) = 1.0;
+                end
+            end
+        end
+        % Top BC
+        for i = 1:1
+            for j = 2:j_max-1 % Avoid corners
+                kpos = pmap(i, j, j_max); % what node #
+                kpossym = sympmap(i,j,j_max);
+                for group = 1:G
+                    k = ((group-1)*i_max*j_max) + kpos;
+                    k_e = k + 1;
+                    k_w = k - 1;
+                    k_s = k + j_max;
+                    k_n = ((group-1)*i_max*j_max) + kpossym + 1;
+
+                    thisMat = Domain(i, j);
+                    thisT = T(kpos);
+
+                    if thisMat == 1 % Fuel
+                        thisD = FUL_D(thisT, TMOD, myBOR, group);
+                        thisSig_R = FUL_Sigma_R(thisT, TMOD, myBOR, group);
+                    elseif thisMat == 2 % Moderator
+                        thisD = MOD_D(TFUL, thisT, myBOR, group);
+                        thisSig_R = MOD_Sigma_R(TFUL, thisT, myBOR, group);
+                    end
+
+                    % pointer mapping goes row-by-row to assemble Coeff. Matrix
+                    H(k,k) = L*thisSig_R*(1.0) + (thisD/L)*((2.0/Deltaxbar^2) + (2.0/Deltaybar^2));
+                    H(k,k_e) = H(k,k_e) + (thisD/L)*(-1.0/Deltaxbar^2);
+                    H(k,k_w) = H(k,k_w) + (thisD/L)*(-1.0/Deltaxbar^2);
+                    H(k,k_n) = H(k,k_n) + (thisD/L)*(-1.0/Deltaybar^2);
+                    H(k,k_s) = H(k,k_s) + (thisD/L)*(-1.0/Deltaybar^2);
+
+                    chi_g = CHI(group);
+                    for gprime = 1:G
+                        % tok = kpos + (group-1)*i_max*j_max;
+                        tok = k;
+                        fromk = kpos + (gprime-1)*i_max*j_max;
+                        
+                        if thisMat == 1 % Fuel
+                            nuSig_fgprime = FUL_nuSigma_f(thisT, TMOD, myBOR, gprime);
+                            Sig_sgprimeg = FUL_Sigma_s(thisT, TMOD, myBOR, gprime, group);
+                        elseif thisMat == 2 % Moderator
+                            nuSig_fgprime = MOD_nuSigma_f(TFUL, thisT, myBOR, gprime);
+                            Sig_sgprimeg = MOD_Sigma_s(TFUL, thisT, myBOR, gprime, group);
+                        end 
+
+                        F(tok,fromk) = L*chi_g*nuSig_fgprime*(1.0);
+                        S(tok,fromk) = L*Sig_sgprimeg*(1.0);
+
+                    end
+                end
+            end
+        end
+
+        % Center Boundary
+        i = 1;
+        j = 1;
         kpos = pmap(i, j, j_max); % what node #
         for group = 1:G
             k = ((group-1)*i_max*j_max) + kpos;
             k_e = k + 1;
-            k_w = k - 1;
-            k_n = k - j_max;
-            k_s = k + j_max;
+            k_s = k + i_max;
+            k_n = k_e;
+            k_w = k_s;
 
             thisMat = Domain(i, j);
             thisT = T(kpos);
@@ -487,637 +676,524 @@ for i = 2:i_max-1
 
             end
         end
-    end
-end
 
-% Apply BCs
-% Left BC
-for i = 2:i_max-1 % Avoid corners
-    for j = 1:1
-        kpos = pmap(i, j, j_max); % what node #
-        kpossym = sympmap(i,j,j_max);
-        for group = 1:G
-            k = ((group-1)*i_max*j_max) + kpos;
-            k_e = k + 1;
-            k_n = k - j_max;
-            k_s = k + j_max;
-            k_w = ((group-1)*i_max*j_max) + kpossym + j_max;
+        %% Iterative Solver: Neutronics Power-Iteration
+        % ------------------------------------------------------------------------------
+        % Compute evolution operator initially to minimize work in loop
+        % Amat = inv(H-S)*F % Slowww
+        % Amat = (H-S)\F; % Memory-Intensive
+        fprintf('Unifying Matrices...\n');
+        Amat = (H-S)\F; % Enforce Memory Clearing (since MATLAB is weird about it)
+        % fprintf('paused...')
+        % pause()
+        clearvars H S F
 
-            thisMat = Domain(i, j);
-            thisT = T(kpos);
+        % Init iteration vars
+        tTot = 0;
+        iter = 0;
+        residual = 1.0E5; % init residual
+        epsilon = 1.0E-16; % drive residual down to this value before terminating
 
-            if thisMat == 1 % Fuel
-                thisD = FUL_D(thisT, TMOD, myBOR, group);
-                thisSig_R = FUL_Sigma_R(thisT, TMOD, myBOR, group);
-            elseif thisMat == 2 % Moderator
-                thisD = MOD_D(TFUL, thisT, myBOR, group);
-                thisSig_R = MOD_Sigma_R(TFUL, thisT, myBOR, group);
+        % Begin iteration
+        fprintf('Solving for %i degrees of freedom...\n', G*i_max*j_max);
+        while (residual > epsilon)
+        % while (iter<100)
+
+            tStart = tic;
+
+            % Track previous source vector, flux vector, and k
+            phi_old = phi;
+            keff_old = keff;
+
+            % Solve new guess of Phi
+            phi = Amat * phi; % Evolve Flux
+            phi = phi/norm(phi); % Normalize
+
+            % Solve new guess of k (optional)
+            % phiT = transpose(phi);
+            % keff = phiT * (Amat * phi); % Search Dominant Eigenvalue
+
+            % Compute the new residual
+            residual = norm(phi-phi_old);
+            residual = residual/(i_max*j_max); % Normalize for DOF
+
+            % Plot solution
+            if mod(iter,100) == 0
+                mygroup = G; % Look at slowest group because characteristic features
+                slowPlot = reshape(phi(1+(mygroup-1)*i_max*j_max:mygroup*i_max*j_max), i_max, j_max);
+                % slowPlot = reshape(phi(1:i_max*j_max), i_max, j_max) + reshape(phi(1+i_max*j_max:2*i_max*j_max), i_max, j_max);
+                figure(1);
+                % Plot flux surface
+                surf(x,y,slowPlot);
+                ylabel('y');
+                xlabel('x');
+                title('Thermal Flux Surface');
+                drawnow;
             end
 
-            % pointer mapping goes row-by-row to assemble Coeff. Matrix
-            H(k,k) = L*thisSig_R*(1.0) + (thisD/L)*((2.0/Deltaxbar^2) + (2.0/Deltaybar^2));
-            H(k,k_e) = H(k,k_e) + (thisD/L)*(-1.0/Deltaxbar^2);
-            H(k,k_w) = H(k,k_w) + (thisD/L)*(-1.0/Deltaxbar^2);
-            H(k,k_n) = H(k,k_n) + (thisD/L)*(-1.0/Deltaybar^2);
-            H(k,k_s) = H(k,k_s) + (thisD/L)*(-1.0/Deltaybar^2);
+            tTot = tTot + toc(tStart);
 
-            chi_g = CHI(group);
-            for gprime = 1:G
-                % tok = kpos + (group-1)*i_max*j_max;
-                tok = k;
-                fromk = kpos + (gprime-1)*i_max*j_max;
-                
-                if thisMat == 1 % Fuel
-                    nuSig_fgprime = FUL_nuSigma_f(thisT, TMOD, myBOR, gprime);
-                    Sig_sgprimeg = FUL_Sigma_s(thisT, TMOD, myBOR, gprime, group);
-                elseif thisMat == 2 % Moderator
-                    nuSig_fgprime = MOD_nuSigma_f(TFUL, thisT, myBOR, gprime);
-                    Sig_sgprimeg = MOD_Sigma_s(TFUL, thisT, myBOR, gprime, group);
-                end 
+            fprintf(1,'iter = %i, residual = %g\n',iter,log10(residual));
+            iter = iter + 1;
+        end
+        fprintf('Complete!\n');
 
-                F(tok,fromk) = L*chi_g*nuSig_fgprime*(1.0);
-                S(tok,fromk) = L*Sig_sgprimeg*(1.0);
+        % Final Value of k
+        phiT = transpose(phi);
+        keff = phiT * (Amat * phi); % Search Dominant Eigenvalue
+        fprintf('k_eff = %.5f \n',keff);
+        fprintf('Boron Conc = %.3f ppm\n',myBOR);
 
+        q3prime = phi(1:i_max*j_max)+phi(1+i_max*j_max:2*i_max*j_max);
+        q3prime = (totLinPwr/4)*q3prime/(sum(q3prime,'all')*Deltax*Deltay);
+        % q3prime = (totPwr/4)*q3prime/(sum(q3prime,'all')*Deltax*Deltay);
+
+        clearvars Amat
+
+        % pause()
+
+        %% Iterative Solver: Heat Diffusion
+        % ------------------------------------------------------------------------------
+
+        fprintf('\n---Solving for Temperature Profile---\n');
+        MOD_rhoc_p = M{2}.rhoCp;
+        dTdz = (T_out-T_in)/fuelLength;
+        % h = 0.05;
+        h = 3.0;
+
+        % Define Matrices
+        fprintf('Building Matrices...\n');
+        % Init Thermal Matrices
+        A = spalloc(i_max*j_max, i_max*j_max, 5*i_max*j_max); % Sparsely allocate Diffusion Operator with 5 bands
+        Q = zeros(i_max*j_max, 1); % Allocate Heat Source/Removal Vector
+        % Q = q3prime - MOD_rhoc_p*dTdz*w;
+        for i = 2:i_max-1
+            for j = 2:j_max-1
+                k = pmap(i, j, j_max); % what node #
+                k_e = k + 1;
+                k_w = k - 1;
+                k_n = k - j_max;
+                k_s = k + j_max;
+
+                % thisMat = Domain(k); % what material
+                % matnum = mat(k); % what material
+                thisk_k = M{mat(k)}.k;
+                thisk_ke = M{mat(k_e)}.k;
+                thisk_kw = M{mat(k_w)}.k;
+                thisk_kn = M{mat(k_n)}.k;
+                thisk_ks = M{mat(k_s)}.k;
+                % thisrhoc_p = M{mat(k)}.rhoCp;
+
+                if mat(k) == 1 % Fuel
+                    heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
+                    if mat(k_e) == 2
+                        flux_e = h/Deltax;
+                        % heatremoval = heatremoval - h*T_infty/Deltax;
+                    else
+                        flux_e = (thisk_ke+thisk_k)/Deltax^2;
+                    end
+                    if mat(k_w) == 2
+                        flux_w = h/Deltax;
+                        % heatremoval = heatremoval - h*T_infty/Deltax;
+                    else
+                        flux_w = (thisk_kw+thisk_k)/Deltax^2;
+                    end
+                    if mat(k_n) == 2
+                        flux_n = h/Deltay;
+                        % heatremoval = heatremoval - h*T_infty/Deltay;
+                    else
+                        flux_n = (thisk_kn+thisk_k)/Deltay^2;
+                    end
+                    if mat(k_s) == 2
+                        flux_s = h/Deltay;
+                        % heatremoval = heatremoval - h*T_infty/Deltay;
+                    else
+                        flux_s = (thisk_ks+thisk_k)/Deltay^2;
+                    end
+                else
+                    % A(k,k) = 1.0;
+                    % Q(k) = T_infty;
+                    heatremoval = MOD_rhoc_p*dTdz*w(k);
+                    if mat(k_e) == 1
+                        flux_e = h/Deltax;
+                    else
+                        flux_e = (thisk_ke+thisk_k)/Deltax^2;
+                    end
+                    if mat(k_w) == 1
+                        flux_w = h/Deltax;
+                    else
+                        flux_w = (thisk_kw+thisk_k)/Deltax^2;
+                    end
+                    if mat(k_n) == 1
+                        flux_n = h/Deltay;
+                    else
+                        flux_n = (thisk_kn+thisk_k)/Deltay^2;
+                    end
+                    if mat(k_s) == 1
+                        flux_s = h/Deltay;
+                    else
+                        flux_s = (thisk_ks+thisk_k)/Deltay^2;
+                    end
+                end
+                A(k,k) = flux_e + flux_w + flux_n + flux_s;
+                A(k,k_e) = A(k,k_e) - flux_e;
+                A(k,k_w) = A(k,k_w) - flux_w;
+                A(k,k_n) = A(k,k_n) - flux_n;
+                A(k,k_s) = A(k,k_s) - flux_s;
+                Q(k) = (q3prime(k) - heatremoval);
+
+                % pointer mapping goes row-by-row to assemble Coeff. Matrix
+                % A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
+                % A(k,k_e) = -(thisk_ke+thisk_k)/Deltax^2;
+                % A(k,k_w) = -(thisk_kw+thisk_k)/Deltax^2;
+                % A(k,k_n) = -(thisk_kn+thisk_k)/Deltay^2;
+                % A(k,k_s) = -(thisk_ks+thisk_k)/Deltay^2;
+                % %
+                % Q(k) = (q3prime(k) - heatremoval)/1E4;
             end
         end
-    end
-end
-% Right BC
-for i = 1:i_max
-    for j = j_max:j_max
-        kpos = pmap(i, j, j_max); % what node #
-        for group = 1:G
-            k = ((group-1)*i_max*j_max) + kpos;
-            
-            H(k,k) = 1.0;
-        end
-    end
-end
-% Bottom BC
-for i = i_max:i_max
-    for j = 1:j_max
-        kpos = pmap(i, j, j_max); % what node #
-        for group = 1:G
-            k = ((group-1)*i_max*j_max) + kpos;
 
-            H(k,k) = 1.0;
-        end
-    end
-end
-% Top BC
-for i = 1:1
-    for j = 2:j_max-1 % Avoid corners
-        kpos = pmap(i, j, j_max); % what node #
-        kpossym = sympmap(i,j,j_max);
-        for group = 1:G
-            k = ((group-1)*i_max*j_max) + kpos;
-            k_e = k + 1;
-            k_w = k - 1;
-            k_s = k + j_max;
-            k_n = ((group-1)*i_max*j_max) + kpossym + 1;
+        % Apply BCs
+        % Left BC
+        for i = 2:i_max-1 % Avoid corners
+            for j = 1:1
+                k = pmap(i, j, j_max); % what node #
+                ksym = sympmap(i,j,j_max);
+                k_e = k + 1;
+                k_n = k - j_max;
+                k_s = k + j_max;
+                k_w = ksym + j_max;
 
-            thisMat = Domain(i, j);
-            thisT = T(kpos);
+                % thisMat = Domain(k); % what material
+                % matnum = mat(k); % what material
+                thisk_k = M{mat(k)}.k;
+                thisk_ke = M{mat(k_e)}.k;
+                thisk_kw = M{mat(k_w)}.k;
+                thisk_kn = M{mat(k_n)}.k;
+                thisk_ks = M{mat(k_s)}.k;
+                % thisrhoc_p = M{mat(k)}.rhoCp;
 
-            if thisMat == 1 % Fuel
-                thisD = FUL_D(thisT, TMOD, myBOR, group);
-                thisSig_R = FUL_Sigma_R(thisT, TMOD, myBOR, group);
-            elseif thisMat == 2 % Moderator
-                thisD = MOD_D(TFUL, thisT, myBOR, group);
-                thisSig_R = MOD_Sigma_R(TFUL, thisT, myBOR, group);
+                if mat(k) == 1 % Fuel
+                    heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
+                    if mat(k_e) == 2
+                        flux_e = h/Deltax;
+                        % heatremoval = heatremoval - h*T_infty/Deltax;
+                    else
+                        flux_e = (thisk_ke+thisk_k)/Deltax^2;
+                    end
+                    if mat(k_w) == 2
+                        flux_w = h/Deltax;
+                        % heatremoval = heatremoval - h*T_infty/Deltax;
+                    else
+                        flux_w = (thisk_kw+thisk_k)/Deltax^2;
+                    end
+                    if mat(k_n) == 2
+                        flux_n = h/Deltay;
+                        % heatremoval = heatremoval - h*T_infty/Deltay;
+                    else
+                        flux_n = (thisk_kn+thisk_k)/Deltay^2;
+                    end
+                    if mat(k_s) == 2
+                        flux_s = h/Deltay;
+                        % heatremoval = heatremoval - h*T_infty/Deltay;
+                    else
+                        flux_s = (thisk_ks+thisk_k)/Deltay^2;
+                    end
+                else
+                    % A(k,k) = 1.0;
+                    % Q(k) = T_infty;
+                    heatremoval = MOD_rhoc_p*dTdz*w(k);
+                    if mat(k_e) == 1
+                        flux_e = h/Deltax;
+                    else
+                        flux_e = (thisk_ke+thisk_k)/Deltax^2;
+                    end
+                    if mat(k_w) == 1
+                        flux_w = h/Deltax;
+                    else
+                        flux_w = (thisk_kw+thisk_k)/Deltax^2;
+                    end
+                    if mat(k_n) == 1
+                        flux_n = h/Deltay;
+                    else
+                        flux_n = (thisk_kn+thisk_k)/Deltay^2;
+                    end
+                    if mat(k_s) == 1
+                        flux_s = h/Deltay;
+                    else
+                        flux_s = (thisk_ks+thisk_k)/Deltay^2;
+                    end
+                end
+                A(k,k) = flux_e + flux_w + flux_n + flux_s;
+                A(k,k_e) = A(k,k_e) - flux_e;
+                A(k,k_w) = A(k,k_w) - flux_w;
+                A(k,k_n) = A(k,k_n) - flux_n;
+                A(k,k_s) = A(k,k_s) - flux_s;
+                Q(k) = (q3prime(k) - heatremoval);
+
+                % pointer mapping goes row-by-row to assemble Coeff. Matrix
+                % A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
+                % A(k,k_e) = A(k,k_e) - (thisk_ke+thisk_k)/Deltax^2;
+                % A(k,k_w) = A(k,k_w) - (thisk_kw+thisk_k)/Deltax^2;
+                % A(k,k_n) = A(k,k_n) - (thisk_kn+thisk_k)/Deltay^2;
+                % A(k,k_s) = A(k,k_s) - (thisk_ks+thisk_k)/Deltay^2;
+                %
+                % Q(k) = (q3prime(k) - heatremoval)/1E4;
             end
-
-            % pointer mapping goes row-by-row to assemble Coeff. Matrix
-            H(k,k) = L*thisSig_R*(1.0) + (thisD/L)*((2.0/Deltaxbar^2) + (2.0/Deltaybar^2));
-            H(k,k_e) = H(k,k_e) + (thisD/L)*(-1.0/Deltaxbar^2);
-            H(k,k_w) = H(k,k_w) + (thisD/L)*(-1.0/Deltaxbar^2);
-            H(k,k_n) = H(k,k_n) + (thisD/L)*(-1.0/Deltaybar^2);
-            H(k,k_s) = H(k,k_s) + (thisD/L)*(-1.0/Deltaybar^2);
-
-            chi_g = CHI(group);
-            for gprime = 1:G
-                % tok = kpos + (group-1)*i_max*j_max;
-                tok = k;
-                fromk = kpos + (gprime-1)*i_max*j_max;
-                
-                if thisMat == 1 % Fuel
-                    nuSig_fgprime = FUL_nuSigma_f(thisT, TMOD, myBOR, gprime);
-                    Sig_sgprimeg = FUL_Sigma_s(thisT, TMOD, myBOR, gprime, group);
-                elseif thisMat == 2 % Moderator
-                    nuSig_fgprime = MOD_nuSigma_f(TFUL, thisT, myBOR, gprime);
-                    Sig_sgprimeg = MOD_Sigma_s(TFUL, thisT, myBOR, gprime, group);
-                end 
-
-                F(tok,fromk) = L*chi_g*nuSig_fgprime*(1.0);
-                S(tok,fromk) = L*Sig_sgprimeg*(1.0);
-
+        end
+        % Right BC
+        for i = 1:i_max
+            for j = j_max:j_max
+                k = pmap(i, j, j_max); % what node #
+                A(k,k) = 1.0;
+                Q(k) = T_infty;
             end
         end
-    end
-end
+        % Bottom BC
+        for i = i_max:i_max
+            for j = 1:j_max
+                k = pmap(i, j, j_max); % what node #
+                A(k,k) = 1.0;
+                Q(k) = T_infty;
+            end
+        end
 
-% Center Boundary
-i = 1;
-j = 1;
-kpos = pmap(i, j, j_max); % what node #
-for group = 1:G
-    k = ((group-1)*i_max*j_max) + kpos;
-    k_e = k + 1;
-    k_s = k + i_max;
-    k_n = k_e;
-    k_w = k_s;
+        % Top BC
+        for i = 1:1
+            for j = 2:j_max-1 % Avoid corners
+                k = pmap(i, j, j_max); % what node #
+                ksym = sympmap(i,j,j_max);
+                k_e = k + 1;
+                k_w = k - 1;
+                k_s = k + j_max;
+                k_n = ksym + 1;
 
-    thisMat = Domain(i, j);
-    thisT = T(kpos);
+                % thisMat = Domain(k); % what material
+                % matnum = mat(k); % what material
+                thisk_k = M{mat(k)}.k;
+                thisk_ke = M{mat(k_e)}.k;
+                thisk_kw = M{mat(k_w)}.k;
+                thisk_kn = M{mat(k_n)}.k;
+                thisk_ks = M{mat(k_s)}.k;
+                % thisrhoc_p = M{mat(k)}.rhoCp;
 
-    if thisMat == 1 % Fuel
-        thisD = FUL_D(thisT, TMOD, myBOR, group);
-        thisSig_R = FUL_Sigma_R(thisT, TMOD, myBOR, group);
-    elseif thisMat == 2 % Moderator
-        thisD = MOD_D(TFUL, thisT, myBOR, group);
-        thisSig_R = MOD_Sigma_R(TFUL, thisT, myBOR, group);
-    end
+                if mat(k) == 1 % Fuel
+                    heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
+                    if mat(k_e) == 2
+                        flux_e = h/Deltax;
+                        % heatremoval = heatremoval - h*T_infty/Deltax;
+                    else
+                        flux_e = (thisk_ke+thisk_k)/Deltax^2;
+                    end
+                    if mat(k_w) == 2
+                        flux_w = h/Deltax;
+                        % heatremoval = heatremoval - h*T_infty/Deltax;
+                    else
+                        flux_w = (thisk_kw+thisk_k)/Deltax^2;
+                    end
+                    if mat(k_n) == 2
+                        flux_n = h/Deltay;
+                        % heatremoval = heatremoval - h*T_infty/Deltay;
+                    else
+                        flux_n = (thisk_kn+thisk_k)/Deltay^2;
+                    end
+                    if mat(k_s) == 2
+                        flux_s = h/Deltay;
+                        % heatremoval = heatremoval - h*T_infty/Deltay;
+                    else
+                        flux_s = (thisk_ks+thisk_k)/Deltay^2;
+                    end
+                else
+                    % A(k,k) = 1.0;
+                    % Q(k) = T_infty;
+                    heatremoval = MOD_rhoc_p*dTdz*w(k);
+                    if mat(k_e) == 1
+                        flux_e = h/Deltax;
+                    else
+                        flux_e = (thisk_ke+thisk_k)/Deltax^2;
+                    end
+                    if mat(k_w) == 1
+                        flux_w = h/Deltax;
+                    else
+                        flux_w = (thisk_kw+thisk_k)/Deltax^2;
+                    end
+                    if mat(k_n) == 1
+                        flux_n = h/Deltay;
+                    else
+                        flux_n = (thisk_kn+thisk_k)/Deltay^2;
+                    end
+                    if mat(k_s) == 1
+                        flux_s = h/Deltay;
+                    else
+                        flux_s = (thisk_ks+thisk_k)/Deltay^2;
+                    end
+                end
+                A(k,k) = flux_e + flux_w + flux_n + flux_s;
+                A(k,k_e) = A(k,k_e) - flux_e;
+                A(k,k_w) = A(k,k_w) - flux_w;
+                A(k,k_n) = A(k,k_n) - flux_n;
+                A(k,k_s) = A(k,k_s) - flux_s;
+                Q(k) = (q3prime(k) - heatremoval);
 
-    % pointer mapping goes row-by-row to assemble Coeff. Matrix
-    H(k,k) = L*thisSig_R*(1.0) + (thisD/L)*((2.0/Deltaxbar^2) + (2.0/Deltaybar^2));
-    H(k,k_e) = H(k,k_e) + (thisD/L)*(-1.0/Deltaxbar^2);
-    H(k,k_w) = H(k,k_w) + (thisD/L)*(-1.0/Deltaxbar^2);
-    H(k,k_n) = H(k,k_n) + (thisD/L)*(-1.0/Deltaybar^2);
-    H(k,k_s) = H(k,k_s) + (thisD/L)*(-1.0/Deltaybar^2);
+                % pointer mapping goes row-by-row to assemble Coeff. Matrix
+                % A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
+                % A(k,k_e) = A(k,k_e) - (thisk_ke+thisk_k)/Deltax^2;
+                % A(k,k_w) = A(k,k_w) - (thisk_kw+thisk_k)/Deltax^2;
+                % A(k,k_n) = A(k,k_n) - (thisk_kn+thisk_k)/Deltay^2;
+                % A(k,k_s) = A(k,k_s) - (thisk_ks+thisk_k)/Deltay^2;
+                %
+                % Q(k) = (q3prime(k) - heatremoval)/1E4;
+            end
+        end
 
-    chi_g = CHI(group);
-    for gprime = 1:G
-        % tok = kpos + (group-1)*i_max*j_max;
-        tok = k;
-        fromk = kpos + (gprime-1)*i_max*j_max;
-        
-        if thisMat == 1 % Fuel
-            nuSig_fgprime = FUL_nuSigma_f(thisT, TMOD, myBOR, gprime);
-            Sig_sgprimeg = FUL_Sigma_s(thisT, TMOD, myBOR, gprime, group);
-        elseif thisMat == 2 % Moderator
-            nuSig_fgprime = MOD_nuSigma_f(TFUL, thisT, myBOR, gprime);
-            Sig_sgprimeg = MOD_Sigma_s(TFUL, thisT, myBOR, gprime, group);
-        end 
+        % Center Boundary
+        i = 1;
+        j = 1;
+        k = pmap(i, j, j_max); % what node #
+        k_e = k + 1;
+        k_s = k + i_max;
+        k_n = k_e;
+        k_w = k_s;
 
-        F(tok,fromk) = L*chi_g*nuSig_fgprime*(1.0);
-        S(tok,fromk) = L*Sig_sgprimeg*(1.0);
+        % thisMat = Domain(k); % what material
+        % matnum = mat(k); % what material
+        thisk_k = M{mat(k)}.k;
+        thisk_ke = M{mat(k_e)}.k;
+        thisk_kw = M{mat(k_w)}.k;
+        thisk_kn = M{mat(k_n)}.k;
+        thisk_ks = M{mat(k_s)}.k;
+        % thisrhoc_p = M{mat(k)}.rhoCp;
 
-    end
-end
+        if mat(k) == 1 % Fuel
+            heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
+            if mat(k_e) == 2
+                flux_e = h/Deltax;
+                % heatremoval = heatremoval - h*T_infty/Deltax;
+            else
+                flux_e = (thisk_ke+thisk_k)/Deltax^2;
+            end
+            if mat(k_w) == 2
+                flux_w = h/Deltax;
+                % heatremoval = heatremoval - h*T_infty/Deltax;
+            else
+                flux_w = (thisk_kw+thisk_k)/Deltax^2;
+            end
+            if mat(k_n) == 2
+                flux_n = h/Deltay;
+                % heatremoval = heatremoval - h*T_infty/Deltay;
+            else
+                flux_n = (thisk_kn+thisk_k)/Deltay^2;
+            end
+            if mat(k_s) == 2
+                flux_s = h/Deltay;
+                % heatremoval = heatremoval - h*T_infty/Deltay;
+            else
+                flux_s = (thisk_ks+thisk_k)/Deltay^2;
+            end
+        else
+            % A(k,k) = 1.0;
+            % Q(k) = T_infty;
+            heatremoval = MOD_rhoc_p*dTdz*w(k);
+            if mat(k_e) == 1
+                flux_e = h/Deltax;
+            else
+                flux_e = (thisk_ke+thisk_k)/Deltax^2;
+            end
+            if mat(k_w) == 1
+                flux_w = h/Deltax;
+            else
+                flux_w = (thisk_kw+thisk_k)/Deltax^2;
+            end
+            if mat(k_n) == 1
+                flux_n = h/Deltay;
+            else
+                flux_n = (thisk_kn+thisk_k)/Deltay^2;
+            end
+            if mat(k_s) == 1
+                flux_s = h/Deltay;
+            else
+                flux_s = (thisk_ks+thisk_k)/Deltay^2;
+            end
+        end
+        A(k,k) = flux_e + flux_w + flux_n + flux_s;
+        A(k,k_e) = A(k,k_e) - flux_e;
+        A(k,k_w) = A(k,k_w) - flux_w;
+        A(k,k_n) = A(k,k_n) - flux_n;
+        A(k,k_s) = A(k,k_s) - flux_s;
+        Q(k) = (q3prime(k) - heatremoval);
 
-%% Iterative Solver: Neutronics Power-Iteration
-% ------------------------------------------------------------------------------
-% Compute evolution operator initially to minimize work in loop
-% Amat = inv(H-S)*F % Slowww
-% Amat = (H-S)\F; % Memory-Intensive
-fprintf('Unifying Matrices...\n');
-Amat = (H-S)\F; % Enforce Memory Clearing (since MATLAB is weird about it)
-clearvars H S F
+        % pointer mapping goes row-by-row to assemble Coeff. Matrix
+        % A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
+        % A(k,k_e) = A(k,k_e) - (thisk_ke+thisk_k)/Deltax^2;
+        % A(k,k_w) = A(k,k_w) - (thisk_kw+thisk_k)/Deltax^2;
+        % A(k,k_n) = A(k,k_n) - (thisk_kn+thisk_k)/Deltay^2;
+        % A(k,k_s) = A(k,k_s) - (thisk_ks+thisk_k)/Deltay^2;
+        % %
+        % Q(k) = (q3prime(k) - heatremoval)/1E4;
 
-% Init iteration vars
-tTot = 0;
-iter = 0;
-
-% Begin iteration
-fprintf('Solving for %i degrees of freedom...\n', G*i_max*j_max);
-while (residual > epsilon)
-% while (iter<100)
-
-    tStart = tic;
-
-    % Track previous source vector, flux vector, and k
-    phi_old = phi;
-    keff_old = keff;
-
-    % Solve new guess of Phi
-    phi = Amat * phi; % Evolve Flux
-    phi = phi/norm(phi); % Normalize
-
-    % Solve new guess of k (optional)
-    % phiT = transpose(phi);
-    % keff = phiT * (Amat * phi); % Search Dominant Eigenvalue
-
-    % Compute the new residual
-    residual = norm(phi-phi_old);
-    residual = residual/(i_max*j_max); % Normalize for DOF
-
-    % Plot solution
-    if mod(iter,100) == 0
-        mygroup = G; % Look at slowest group because characteristic features
-        slowPlot = reshape(phi(1+(mygroup-1)*i_max*j_max:mygroup*i_max*j_max), i_max, j_max);
-        % slowPlot = reshape(phi(1:i_max*j_max), i_max, j_max) + reshape(phi(1+i_max*j_max:2*i_max*j_max), i_max, j_max);
+        fprintf('Solving for %i degrees of freedom...\n', i_max*j_max);
+        T = A\Q; % Axial Flow Field [cm/s] -> forms a heat removal term
+        clearvars A Q
+        fprintf('Complete!\n');
+        TPlot = reshape(T, i_max, j_max);
         figure(1);
-        % Plot flux surface
-        surf(x,y,slowPlot);
+        surf(x, y, TPlot)
         ylabel('y');
         xlabel('x');
-        title('Thermal Flux Surface');
+        title('Temperature Surface');
         drawnow;
     end
 
-    tTot = tTot + toc(tStart);
-
-    fprintf(1,'iter = %i, residual = %g\n',iter,log10(residual));
-    iter = iter + 1;
-end
-fprintf('Complete!\n');
-
-% Final Value of k
-phiT = transpose(phi);
-keff = phiT * (Amat * phi); % Search Dominant Eigenvalue
-
-q3prime = phi(1:i_max*j_max)+phi(1+i_max*j_max:2*i_max*j_max);
-q3prime = (totLinPwr/4)*q3prime/(sum(q3prime,'all')*Deltax*Deltay);
-% q3prime = (totPwr/4)*q3prime/(sum(q3prime,'all')*Deltax*Deltay);
-
-% pause()
-
-%% Iterative Solver: Heat Diffusion
+%% Iterative Solver: Check Solution + Update Boron
 % ------------------------------------------------------------------------------
 
-fprintf('\n---Solving for Temperature Profile---\n');
-MOD_rhoc_p = M{2}.rhoCp;
-dTdz = (T_out-T_in)/fuelLength;
-% h = 0.05;
-h = 3.0;
+    keff_iter = keff;
 
-% Define Matrices
-fprintf('Building Matrices...\n');
-% Q = q3prime - MOD_rhoc_p*dTdz*w;
-for i = 2:i_max-1
-    for j = 2:j_max-1
-        k = pmap(i, j, j_max); % what node #
-        k_e = k + 1;
-        k_w = k - 1;
-        k_n = k - j_max;
-        k_s = k + j_max;
-
-        % thisMat = Domain(k); % what material
-        % matnum = mat(k); % what material
-        thisk_k = M{mat(k)}.k;
-        thisk_ke = M{mat(k_e)}.k;
-        thisk_kw = M{mat(k_w)}.k;
-        thisk_kn = M{mat(k_n)}.k;
-        thisk_ks = M{mat(k_s)}.k;
-        % thisrhoc_p = M{mat(k)}.rhoCp;
-
-        if mat(k) == 1 % Fuel
-            heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
-            if mat(k_e) == 2
-                flux_e = h/Deltax;
-                % heatremoval = heatremoval - h*T_infty/Deltax;
-            else
-                flux_e = (thisk_ke+thisk_k)/Deltax^2;
-            end
-            if mat(k_w) == 2
-                flux_w = h/Deltax;
-                % heatremoval = heatremoval - h*T_infty/Deltax;
-            else
-                flux_w = (thisk_kw+thisk_k)/Deltax^2;
-            end
-            if mat(k_n) == 2
-                flux_n = h/Deltay;
-                % heatremoval = heatremoval - h*T_infty/Deltay;
-            else
-                flux_n = (thisk_kn+thisk_k)/Deltay^2;
-            end
-            if mat(k_s) == 2
-                flux_s = h/Deltay;
-                % heatremoval = heatremoval - h*T_infty/Deltay;
-            else
-                flux_s = (thisk_ks+thisk_k)/Deltay^2;
-            end
-        else
-            % A(k,k) = 1.0;
-            % Q(k) = T_infty;
-            heatremoval = MOD_rhoc_p*dTdz*w(k);
-            if mat(k_e) == 1
-                flux_e = h/Deltax;
-            else
-                flux_e = (thisk_ke+thisk_k)/Deltax^2;
-            end
-            if mat(k_w) == 1
-                flux_w = h/Deltax;
-            else
-                flux_w = (thisk_kw+thisk_k)/Deltax^2;
-            end
-            if mat(k_n) == 1
-                flux_n = h/Deltay;
-            else
-                flux_n = (thisk_kn+thisk_k)/Deltay^2;
-            end
-            if mat(k_s) == 1
-                flux_s = h/Deltay;
-            else
-                flux_s = (thisk_ks+thisk_k)/Deltay^2;
-            end
-        end
-        A(k,k) = flux_e + flux_w + flux_n + flux_s;
-        A(k,k_e) = A(k,k_e) - flux_e;
-        A(k,k_w) = A(k,k_w) - flux_w;
-        A(k,k_n) = A(k,k_n) - flux_n;
-        A(k,k_s) = A(k,k_s) - flux_s;
-        Q(k) = (q3prime(k) - heatremoval);
-
-        % pointer mapping goes row-by-row to assemble Coeff. Matrix
-        % A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
-        % A(k,k_e) = -(thisk_ke+thisk_k)/Deltax^2;
-        % A(k,k_w) = -(thisk_kw+thisk_k)/Deltax^2;
-        % A(k,k_n) = -(thisk_kn+thisk_k)/Deltay^2;
-        % A(k,k_s) = -(thisk_ks+thisk_k)/Deltay^2;
-        % %
-        % Q(k) = (q3prime(k) - heatremoval)/1E4;
+    if keff_iter < 1.0
+        myBORLo = myBOR;
+    elseif keff_iter > 1.0
+        myBORHi = myBOR;
     end
+
 end
 
-% Apply BCs
-% Left BC
-for i = 2:i_max-1 % Avoid corners
-    for j = 1:1
-        k = pmap(i, j, j_max); % what node #
-        ksym = sympmap(i,j,j_max);
-        k_e = k + 1;
-        k_n = k - j_max;
-        k_s = k + j_max;
-        k_w = ksym + j_max;
+%% Final Plot
+% ------------------------------------------------------------------------------
 
-        % thisMat = Domain(k); % what material
-        % matnum = mat(k); % what material
-        thisk_k = M{mat(k)}.k;
-        thisk_ke = M{mat(k_e)}.k;
-        thisk_kw = M{mat(k_w)}.k;
-        thisk_kn = M{mat(k_n)}.k;
-        thisk_ks = M{mat(k_s)}.k;
-        % thisrhoc_p = M{mat(k)}.rhoCp;
+Tplot = reshape(T, i_max, j_max);
+Tref1 = rot90(Tplot,3);
+Tref1 = Tref1(:,1:end-1);
+Tref1Plot = horzcat(Tref1, Tplot);
+Tref2 = rot90(Tref1Plot, 2);
+Tref2 = Tref2(1:end-1,:);
+Tref2Plot = vertcat(Tref2, Tref1Plot);
 
-        if mat(k) == 1 % Fuel
-            heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
-            if mat(k_e) == 2
-                flux_e = h/Deltax;
-                % heatremoval = heatremoval - h*T_infty/Deltax;
-            else
-                flux_e = (thisk_ke+thisk_k)/Deltax^2;
-            end
-            if mat(k_w) == 2
-                flux_w = h/Deltax;
-                % heatremoval = heatremoval - h*T_infty/Deltax;
-            else
-                flux_w = (thisk_kw+thisk_k)/Deltax^2;
-            end
-            if mat(k_n) == 2
-                flux_n = h/Deltay;
-                % heatremoval = heatremoval - h*T_infty/Deltay;
-            else
-                flux_n = (thisk_kn+thisk_k)/Deltay^2;
-            end
-            if mat(k_s) == 2
-                flux_s = h/Deltay;
-                % heatremoval = heatremoval - h*T_infty/Deltay;
-            else
-                flux_s = (thisk_ks+thisk_k)/Deltay^2;
-            end
-        else
-            % A(k,k) = 1.0;
-            % Q(k) = T_infty;
-            heatremoval = MOD_rhoc_p*dTdz*w(k);
-            if mat(k_e) == 1
-                flux_e = h/Deltax;
-            else
-                flux_e = (thisk_ke+thisk_k)/Deltax^2;
-            end
-            if mat(k_w) == 1
-                flux_w = h/Deltax;
-            else
-                flux_w = (thisk_kw+thisk_k)/Deltax^2;
-            end
-            if mat(k_n) == 1
-                flux_n = h/Deltay;
-            else
-                flux_n = (thisk_kn+thisk_k)/Deltay^2;
-            end
-            if mat(k_s) == 1
-                flux_s = h/Deltay;
-            else
-                flux_s = (thisk_ks+thisk_k)/Deltay^2;
-            end
-        end
-        A(k,k) = flux_e + flux_w + flux_n + flux_s;
-        A(k,k_e) = A(k,k_e) - flux_e;
-        A(k,k_w) = A(k,k_w) - flux_w;
-        A(k,k_n) = A(k,k_n) - flux_n;
-        A(k,k_s) = A(k,k_s) - flux_s;
-        Q(k) = (q3prime(k) - heatremoval);
-
-        % pointer mapping goes row-by-row to assemble Coeff. Matrix
-        % A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
-        % A(k,k_e) = A(k,k_e) - (thisk_ke+thisk_k)/Deltax^2;
-        % A(k,k_w) = A(k,k_w) - (thisk_kw+thisk_k)/Deltax^2;
-        % A(k,k_n) = A(k,k_n) - (thisk_kn+thisk_k)/Deltay^2;
-        % A(k,k_s) = A(k,k_s) - (thisk_ks+thisk_k)/Deltay^2;
-        %
-        % Q(k) = (q3prime(k) - heatremoval)/1E4;
-    end
-end
-% Right BC
-for i = 1:i_max
-    for j = j_max:j_max
-        k = pmap(i, j, j_max); % what node #
-        A(k,k) = 1.0;
-        Q(k) = T_infty;
-    end
-end
-% Bottom BC
-for i = i_max:i_max
-    for j = 1:j_max
-        k = pmap(i, j, j_max); % what node #
-        A(k,k) = 1.0;
-        Q(k) = T_infty;
-    end
-end
-
-% Top BC
-for i = 1:1
-    for j = 2:j_max-1 % Avoid corners
-        k = pmap(i, j, j_max); % what node #
-        ksym = sympmap(i,j,j_max);
-        k_e = k + 1;
-        k_w = k - 1;
-        k_s = k + j_max;
-        k_n = ksym + 1;
-
-        % thisMat = Domain(k); % what material
-        % matnum = mat(k); % what material
-        thisk_k = M{mat(k)}.k;
-        thisk_ke = M{mat(k_e)}.k;
-        thisk_kw = M{mat(k_w)}.k;
-        thisk_kn = M{mat(k_n)}.k;
-        thisk_ks = M{mat(k_s)}.k;
-        % thisrhoc_p = M{mat(k)}.rhoCp;
-
-        if mat(k) == 1 % Fuel
-            heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
-            if mat(k_e) == 2
-                flux_e = h/Deltax;
-                % heatremoval = heatremoval - h*T_infty/Deltax;
-            else
-                flux_e = (thisk_ke+thisk_k)/Deltax^2;
-            end
-            if mat(k_w) == 2
-                flux_w = h/Deltax;
-                % heatremoval = heatremoval - h*T_infty/Deltax;
-            else
-                flux_w = (thisk_kw+thisk_k)/Deltax^2;
-            end
-            if mat(k_n) == 2
-                flux_n = h/Deltay;
-                % heatremoval = heatremoval - h*T_infty/Deltay;
-            else
-                flux_n = (thisk_kn+thisk_k)/Deltay^2;
-            end
-            if mat(k_s) == 2
-                flux_s = h/Deltay;
-                % heatremoval = heatremoval - h*T_infty/Deltay;
-            else
-                flux_s = (thisk_ks+thisk_k)/Deltay^2;
-            end
-        else
-            % A(k,k) = 1.0;
-            % Q(k) = T_infty;
-            heatremoval = MOD_rhoc_p*dTdz*w(k);
-            if mat(k_e) == 1
-                flux_e = h/Deltax;
-            else
-                flux_e = (thisk_ke+thisk_k)/Deltax^2;
-            end
-            if mat(k_w) == 1
-                flux_w = h/Deltax;
-            else
-                flux_w = (thisk_kw+thisk_k)/Deltax^2;
-            end
-            if mat(k_n) == 1
-                flux_n = h/Deltay;
-            else
-                flux_n = (thisk_kn+thisk_k)/Deltay^2;
-            end
-            if mat(k_s) == 1
-                flux_s = h/Deltay;
-            else
-                flux_s = (thisk_ks+thisk_k)/Deltay^2;
-            end
-        end
-        A(k,k) = flux_e + flux_w + flux_n + flux_s;
-        A(k,k_e) = A(k,k_e) - flux_e;
-        A(k,k_w) = A(k,k_w) - flux_w;
-        A(k,k_n) = A(k,k_n) - flux_n;
-        A(k,k_s) = A(k,k_s) - flux_s;
-        Q(k) = (q3prime(k) - heatremoval);
-
-        % pointer mapping goes row-by-row to assemble Coeff. Matrix
-        % A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
-        % A(k,k_e) = A(k,k_e) - (thisk_ke+thisk_k)/Deltax^2;
-        % A(k,k_w) = A(k,k_w) - (thisk_kw+thisk_k)/Deltax^2;
-        % A(k,k_n) = A(k,k_n) - (thisk_kn+thisk_k)/Deltay^2;
-        % A(k,k_s) = A(k,k_s) - (thisk_ks+thisk_k)/Deltay^2;
-        %
-        % Q(k) = (q3prime(k) - heatremoval)/1E4;
-    end
-end
-
-% Center Boundary
-i = 1;
-j = 1;
-k = pmap(i, j, j_max); % what node #
-k_e = k + 1;
-k_s = k + i_max;
-k_n = k_e;
-k_w = k_s;
-
-% thisMat = Domain(k); % what material
-% matnum = mat(k); % what material
-thisk_k = M{mat(k)}.k;
-thisk_ke = M{mat(k_e)}.k;
-thisk_kw = M{mat(k_w)}.k;
-thisk_kn = M{mat(k_n)}.k;
-thisk_ks = M{mat(k_s)}.k;
-% thisrhoc_p = M{mat(k)}.rhoCp;
-
-if mat(k) == 1 % Fuel
-    heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
-    if mat(k_e) == 2
-        flux_e = h/Deltax;
-        % heatremoval = heatremoval - h*T_infty/Deltax;
-    else
-        flux_e = (thisk_ke+thisk_k)/Deltax^2;
-    end
-    if mat(k_w) == 2
-        flux_w = h/Deltax;
-        % heatremoval = heatremoval - h*T_infty/Deltax;
-    else
-        flux_w = (thisk_kw+thisk_k)/Deltax^2;
-    end
-    if mat(k_n) == 2
-        flux_n = h/Deltay;
-        % heatremoval = heatremoval - h*T_infty/Deltay;
-    else
-        flux_n = (thisk_kn+thisk_k)/Deltay^2;
-    end
-    if mat(k_s) == 2
-        flux_s = h/Deltay;
-        % heatremoval = heatremoval - h*T_infty/Deltay;
-    else
-        flux_s = (thisk_ks+thisk_k)/Deltay^2;
-    end
-else
-    % A(k,k) = 1.0;
-    % Q(k) = T_infty;
-    heatremoval = MOD_rhoc_p*dTdz*w(k);
-    if mat(k_e) == 1
-        flux_e = h/Deltax;
-    else
-        flux_e = (thisk_ke+thisk_k)/Deltax^2;
-    end
-    if mat(k_w) == 1
-        flux_w = h/Deltax;
-    else
-        flux_w = (thisk_kw+thisk_k)/Deltax^2;
-    end
-    if mat(k_n) == 1
-        flux_n = h/Deltay;
-    else
-        flux_n = (thisk_kn+thisk_k)/Deltay^2;
-    end
-    if mat(k_s) == 1
-        flux_s = h/Deltay;
-    else
-        flux_s = (thisk_ks+thisk_k)/Deltay^2;
-    end
-end
-A(k,k) = flux_e + flux_w + flux_n + flux_s;
-A(k,k_e) = A(k,k_e) - flux_e;
-A(k,k_w) = A(k,k_w) - flux_w;
-A(k,k_n) = A(k,k_n) - flux_n;
-A(k,k_s) = A(k,k_s) - flux_s;
-Q(k) = (q3prime(k) - heatremoval);
-
-% pointer mapping goes row-by-row to assemble Coeff. Matrix
-% A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
-% A(k,k_e) = A(k,k_e) - (thisk_ke+thisk_k)/Deltax^2;
-% A(k,k_w) = A(k,k_w) - (thisk_kw+thisk_k)/Deltax^2;
-% A(k,k_n) = A(k,k_n) - (thisk_kn+thisk_k)/Deltay^2;
-% A(k,k_s) = A(k,k_s) - (thisk_ks+thisk_k)/Deltay^2;
-% %
-% Q(k) = (q3prime(k) - heatremoval)/1E4;
-
-fprintf('Solving for %i degrees of freedom...\n', i_max*j_max);
-T = A\Q; % Axial Flow Field [cm/s] -> forms a heat removal term
-fprintf('Complete!\n');
-TPlot = reshape(T, i_max, j_max);
 figure(1);
-surf(x, y, TPlot)
-ylabel('y');
-xlabel('x');
-title('Temperature Surface');
-drawnow;
+% Plot temp surface
+surf(fullx,fully,Tref2Plot);
+ylabel('y [cm]');
+xlabel('x [cm]');
+zlabel('Temperature [K]')
+title('Steady-State Solution for a Reactor');
+saveas(figure(1),fullfile(myCWD,subfolder,'tempSurface.jpg'));
+
+%% Save Results
+% ------------------------------------------------------------------------------
+
+resultmat = 'myVals.mat';
+resultOut = fullfile(myCWD,subfolder,resultmat);
+
+% Parameters of Interest
+% myBOR [ppm]
+% keff_iter []
+save(resultOut, 'myBOR', 'keff_iter')
+
+% And Solution Matrices
+save(fullfile(myCWD,subfolder,'w.mat'), 'w');
+save(fullfile(myCWD,subfolder,'phi.mat'), 'phi');
+save(fullfile(myCWD,subfolder,'xPlot.mat'), 'fullx');
+save(fullfile(myCWD,subfolder,'yPlot.mat'), 'fully');
+save(fullfile(myCWD,subfolder,'TPlot.mat'), 'Tref2Plot');
 
 %% Functions
 % ------------------------------------------------------------------------------
@@ -1129,9 +1205,9 @@ function D = FUL_D(tfu, tmo, bor, g)
     global FUL_D1;
     global FUL_D2;
     if g==1
-        D = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_D1, tfu, tmo, bor);
+        D = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_D1, tfu, tmo, bor,'spline');
     elseif g==2
-        D = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_D2, tfu, tmo, bor);
+        D = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_D2, tfu, tmo, bor,'spline');
     else
         D = 0;
     end
@@ -1144,9 +1220,9 @@ function Sigma_R = FUL_Sigma_R(tfu, tmo, bor, g)
     global FUL_Sigma_R1;
     global FUL_Sigma_R2;
     if g==1
-        Sigma_R = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_Sigma_R1, tfu, tmo, bor);
+        Sigma_R = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_Sigma_R1, tfu, tmo, bor,'spline');
     elseif g==2
-        Sigma_R = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_Sigma_R2, tfu, tmo, bor);
+        Sigma_R = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_Sigma_R2, tfu, tmo, bor,'spline');
     else
         Sigma_R = 0;
     end
@@ -1174,11 +1250,11 @@ function Sigma_s = FUL_Sigma_s(tfu, tmo, bor, gprime, g)
         if g==1
             Sigma_s = 0; % interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_Sigma_s11, tfu, tmo, bor);
         elseif g==2
-            Sigma_s = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_Sigma_s12, tfu, tmo, bor);
+            Sigma_s = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_Sigma_s12, tfu, tmo, bor,'spline');
         end
     elseif gprime==2
         if g==1
-            Sigma_s = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_Sigma_s21, tfu, tmo, bor);
+            Sigma_s = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_Sigma_s21, tfu, tmo, bor,'spline');
         elseif g==2
             Sigma_s = 0; % interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_Sigma_s22, tfu, tmo, bor);
         end
@@ -1194,9 +1270,9 @@ function nuSigma_f = FUL_nuSigma_f(tfu, tmo, bor, g)
     global FUL_nuSigma_f1;
     global FUL_nuSigma_f2;
     if g==1
-        nuSigma_f = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_nuSigma_f1, tfu, tmo, bor);
+        nuSigma_f = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_nuSigma_f1, tfu, tmo, bor,'spline');
     elseif g==2
-        nuSigma_f = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_nuSigma_f2, tfu, tmo, bor);
+        nuSigma_f = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_nuSigma_f2, tfu, tmo, bor,'spline');
     else
         nuSigma_f = 0;
     end
@@ -1209,9 +1285,9 @@ function D = MOD_D(tfu, tmo, bor, g)
     global MOD_D1;
     global MOD_D2;
     if g==1
-        D = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_D1, tfu, tmo, bor);
+        D = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_D1, tfu, tmo, bor,'spline');
     elseif g==2
-        D = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_D2, tfu, tmo, bor);
+        D = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_D2, tfu, tmo, bor,'spline');
     else
         D = 0;
     end
@@ -1224,9 +1300,9 @@ function Sigma_R = MOD_Sigma_R(tfu, tmo, bor, g)
     global MOD_Sigma_R1;
     global MOD_Sigma_R2;
     if g==1
-        Sigma_R = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_Sigma_R1, tfu, tmo, bor);
+        Sigma_R = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_Sigma_R1, tfu, tmo, bor,'spline');
     elseif g==2
-        Sigma_R = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_Sigma_R2, tfu, tmo, bor);
+        Sigma_R = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_Sigma_R2, tfu, tmo, bor,'spline');
     else
         Sigma_R = 0;
     end
@@ -1254,11 +1330,11 @@ function Sigma_s = MOD_Sigma_s(tfu, tmo, bor, gprime, g)
         if g==1
             Sigma_s = 0; % interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_Sigma_s11, tfu, tmo, bor);
         elseif g==2
-            Sigma_s = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_Sigma_s12, tfu, tmo, bor);
+            Sigma_s = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_Sigma_s12, tfu, tmo, bor,'spline');
         end
     elseif gprime==2
         if g==1
-            Sigma_s = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_Sigma_s21, tfu, tmo, bor);
+            Sigma_s = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_Sigma_s21, tfu, tmo, bor,'spline');
         elseif g==2
             Sigma_s = 0; %  interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_Sigma_s22, tfu, tmo, bor);
         end
@@ -1274,9 +1350,9 @@ function nuSigma_f = MOD_nuSigma_f(tfu, tmo, bor, g)
     global MOD_nuSigma_f1;
     global MOD_nuSigma_f2;
     if g==1
-        nuSigma_f = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_nuSigma_f1, tfu, tmo, bor);
+        nuSigma_f = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_nuSigma_f1, tfu, tmo, bor,'spline');
     elseif g==2
-        nuSigma_f = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_nuSigma_f2, tfu, tmo, bor);
+        nuSigma_f = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_nuSigma_f2, tfu, tmo, bor,'spline');
     else
         nuSigma_f = 0;
     end

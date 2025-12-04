@@ -73,7 +73,7 @@ q_s = Q/N_Rods # Total Heat Generation in a Single Fuel Element [W]
 # T_infty = (T_in+T_out)/2 # Bulk Fluid Temperature [K]
 T_infty = (543-32)*(5/9) + 273.15 # Avg Coolant Temperature [F->K]
 
-# CASMO Input Params 
+# CASMO Input Params
 PDE = Q/(L*np.pi*np.power(R,2)*N_Rods) # [kW/L]
 print('PDE', PDE)
 PRE = p*1e-5 # [bar]
@@ -82,7 +82,7 @@ print('PIN 1  ', R, ' ', R+g, ' ', R+g+c, '* FUEL PIN')
 print('PIN 2 ', ID_GT/2, ' ', OD_GT/2, ' /  \'COO\'    \'BOX\'  * INSTR TUBE') 
 print('PIN 3 ', ID_GT/2, ' ', OD_GT/2, '/   \'COO\'    \'BOX\'  * GUIDE TUBE')
 print('FUE 1,', rho_UO2*f, '/', E*1E2)
-BORs = [0.0, 600.0, 1200.0]
+BORs = [3000.0, 4500.0, 6000.0]
 TMs = [500, 557.0, 620.0]
 TFs = [600.0, 850.0, 1200.0]
 i=0
