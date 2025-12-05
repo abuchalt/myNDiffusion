@@ -36,12 +36,12 @@ LAYOUT = [
 TF_nom = 850.0; % Nominal Fuel Temperature [K]
 TM_nom = 557.0; % Nominal Moderator Temperature [K]
 
-myBORHi = 4780.7; % Boron Concentration [ppm] that yields k-eff > 1
-myBORLo = 4780.706; % k-eff < 1
-myBOR = 4780.703; % Soluble Poison Concentration
+myBORHi = 4745; % Boron Concentration [ppm] that yields k-eff > 1
+myBORLo = 4757; % k-eff < 1
+% myBOR = 4780; % Soluble Poison Concentration
 
 % File Info
-subfolder='results\\project6\\';
+subfolder='results\\project6\\uniformFuel_TM557';
 mkdir(fullfile(myCWD,subfolder));
 
 %% Import Data
