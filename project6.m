@@ -5,88 +5,26 @@
 % desc
 % ------------------------------------------------------------------------------
 clear all; close all; clc;
-
-%% Import Data
-% ------------------------------------------------------------------------------
 myCWD = pwd;
+
+%% User Input
+% ------------------------------------------------------------------------------
 
 % Thermal Data
 FUL = readtable(fullfile(myCWD,'proj6Data\\thermalData\\Fuel_Lump.csv'));
 MOD = readtable(fullfile(myCWD,'proj6Data\\thermalData\\H2O_Lump.csv'));
 % Cell Array of Materials
+%     1    2    3    4
 M = {FUL, MOD};
+MODindeces = [2]; % Which Indeces in the Cell Array are Coolant?
 
-% Neutron Data
-myMat = load(fullfile(myCWD,'proj6Data\\neutronData\\interpTables.mat'));
-global FUL_TFs;
-global FUL_TMs;
-global FUL_BORs;
-global FUL_D1;
-global FUL_D2;
-global FUL_Sigma_R1;
-global FUL_Sigma_R2;
-global FUL_Sigma_a1;
-global FUL_Sigma_a2;
-global FUL_Sigma_s11;
-global FUL_Sigma_s12;
-global FUL_Sigma_s21;
-global FUL_Sigma_s22;
-global FUL_nuSigma_f1;
-global FUL_nuSigma_f2;
-FUL_TFs = myMat.TFs;
-FUL_TMs = myMat.TMs;
-FUL_BORs = myMat.BORs;
-FUL_D1 = myMat.D1;
-FUL_D2 = myMat.D2;
-FUL_Sigma_R1 = myMat.Sigma_R1;
-FUL_Sigma_R2 = myMat.Sigma_R2;
-FUL_Sigma_a1 = myMat.Sigma_a1;
-FUL_Sigma_a2 = myMat.Sigma_a2;
-FUL_Sigma_s11 = myMat.Sigma_s11;
-FUL_Sigma_s12 = myMat.Sigma_s12;
-FUL_Sigma_s21 = myMat.Sigma_s21;
-FUL_Sigma_s22 = myMat.Sigma_s22;
-FUL_nuSigma_f1 = myMat.nuSigma_f1;
-FUL_nuSigma_f2 = myMat.nuSigma_f2;
-CHI = [1 0];
+% Neutronics Interpolation Tables in Same Order as Materials Array
+myLibraries = {
+    fullfile(myCWD,'proj6Data\\neutronData\\interpTables.mat'), % FUL 
+    fullfile(myCWD,'proj6Data\\neutronData\\interpTablesMod.mat') % MOD
+};
 
-myMat = load(fullfile(myCWD,'proj6Data\\neutronData\\interpTablesMod.mat'));
-global MOD_TFs;
-global MOD_TMs;
-global MOD_BORs;
-global MOD_D1;
-global MOD_D2;
-global MOD_Sigma_R1;
-global MOD_Sigma_R2;
-global MOD_Sigma_a1;
-global MOD_Sigma_a2;
-global MOD_Sigma_s11;
-global MOD_Sigma_s12;
-global MOD_Sigma_s21;
-global MOD_Sigma_s22;
-global MOD_nuSigma_f1;
-global MOD_nuSigma_f2;
-MOD_TFs = myMat.TFs;
-MOD_TMs = myMat.TMs;
-MOD_BORs = myMat.BORs;
-MOD_D1 = myMat.D1;
-MOD_D2 = myMat.D2;
-MOD_Sigma_R1 = myMat.Sigma_R1;
-MOD_Sigma_R2 = myMat.Sigma_R2;
-MOD_Sigma_a1 = myMat.Sigma_a1;
-MOD_Sigma_a2 = myMat.Sigma_a2;
-MOD_Sigma_s11 = myMat.Sigma_s11;
-MOD_Sigma_s12 = myMat.Sigma_s12;
-MOD_Sigma_s21 = myMat.Sigma_s21;
-MOD_Sigma_s22 = myMat.Sigma_s22;
-MOD_nuSigma_f1 = myMat.nuSigma_f1;
-MOD_nuSigma_f2 = myMat.nuSigma_f2;
-
-% Core Layout
-% LAYOUT = [
-%     1 1
-%     1 1
-% ];
+% Quarter-Core Layout
 LAYOUT = [
     1 1 1 1 2
     1 1 1 1 2
@@ -94,6 +32,75 @@ LAYOUT = [
     1 1 2 2 2
     2 2 2 2 2
 ];
+
+TF_nom = 850.0; % Nominal Fuel Temperature [K]
+TM_nom = 557.0; % Nominal Moderator Temperature [K]
+
+myBORHi = 4780.7; % Boron Concentration [ppm] that yields k-eff > 1
+myBORLo = 4780.706; % k-eff < 1
+myBOR = 4780.703; % Soluble Poison Concentration
+
+% File Info
+subfolder='results\\project6\\';
+mkdir(fullfile(myCWD,subfolder));
+
+%% Import Data
+% ------------------------------------------------------------------------------
+
+% Neutron Data
+shapeMats = size(M); % Number of Materials
+
+% Init Fitting Tables as Cell Arrays to Generalize
+global TFs;
+TFs=cell(shapeMats);
+global TMs;
+TMs=cell(shapeMats);
+global BORs;
+BORs=cell(shapeMats);
+global D1;
+D1=cell(shapeMats);
+global D2;
+D2=cell(shapeMats);
+global Sigma_R1;
+Sigma_R1=cell(shapeMats);
+global Sigma_R2;
+Sigma_R2=cell(shapeMats);
+global Sigma_a1;
+Sigma_a1=cell(shapeMats);
+global Sigma_a2;
+Sigma_a2=cell(shapeMats);
+% global Sigma_s11;
+% Sigma_s11=cell(shapeMats);
+global Sigma_s12;
+Sigma_s12=cell(shapeMats);
+global Sigma_s21;
+Sigma_s21=cell(shapeMats);
+% global Sigma_s22;
+% Sigma_s22=cell(shapeMats);
+global nuSigma_f1;
+nuSigma_f1=cell(shapeMats);
+global nuSigma_f2;
+nuSigma_f2=cell(shapeMats);
+
+for index=1:shapeMats(2)
+    myMat = load(myLibraries{index});
+    TFs{index} = myMat.TFs;
+    TMs{index} = myMat.TMs;
+    BORs{index} = myMat.BORs;
+    D1{index} = myMat.D1;
+    D2{index} = myMat.D2;
+    Sigma_R1{index} = myMat.Sigma_R1;
+    Sigma_R2{index} = myMat.Sigma_R2;
+    Sigma_a1{index} = myMat.Sigma_a1;
+    Sigma_a2{index} = myMat.Sigma_a2;
+    % Sigma_s11{index} = myMat.Sigma_s11;
+    Sigma_s12{index} = myMat.Sigma_s12;
+    Sigma_s21{index} = myMat.Sigma_s21;
+    % Sigma_s22{index} = myMat.Sigma_s22;
+    nuSigma_f1{index} = myMat.nuSigma_f1;
+    nuSigma_f2{index} = myMat.nuSigma_f2;
+end
+CHI = [1 0]; % Assume ALL Neutrons Birthed in Fast Group
 
 % Physical params
 totPwr = 250*1E6; % Thermal Output [MW_th -> W_th]
@@ -122,15 +129,8 @@ waterArea = assyArea-pinsArea; % Area Occupied by Water [cm^2]
 fuelCorr = fuelArea/assyArea; % Fraction of Assembly Occupied by Fuel
 modCorr = waterArea/assyArea; % Fraction of Assembly Occupied by Water
 
-
-TF_nom = 850.0; % Nominal Fuel Temperature [K]
-TM_nom = 557.0; % Nominal Moderator Temperature [K]
 TFUL = TF_nom;
 TMOD = TM_nom;
-
-myBORHi = 4780.7;
-myBORLo = 4780.706;
-myBOR = 4780.703; % Soluble Poison Concentration [ppm]
 
 %% Intelligently Find Smallest Diffusion Length for Resolution-Setting
 % ------------------------------------------------------------------------------
@@ -139,16 +139,18 @@ myBOR = 4780.703; % Soluble Poison Concentration [ppm]
 % capture transport phenomena
 
 L = 50; % [cm] Arbitrarily Large Initial Guess
-for i = 1:size(FUL_TFs)
-    for j = 1:size(FUL_TMs)
-        for k = 1:size(FUL_BORs)
-            thisL = sqrt(FUL_D1(i,j,k)/FUL_Sigma_a1(i,j,k)); % Characteristic Diffusion Length [cm]
-            if thisL < L % If smaller, use as new normalization length
-                L = thisL;
-            end
-            thisL = sqrt(FUL_D2(i,j,k)/FUL_Sigma_a2(i,j,k)); % Characteristic Diffusion Length [cm]
-            if thisL < L % If smaller, use as new normalization length
-                L = thisL;
+for m = 1:shapeMats(2)
+    for i = 1:size(TFs{m})
+        for j = 1:size(TMs{m})
+            for k = 1:size(BORs{m})
+                thisL = sqrt(D1{m}(i,j,k)/Sigma_a1{m}(i,j,k)); % Characteristic Diffusion Length [cm]
+                if thisL < L % If smaller, use as new normalization length
+                    L = thisL;
+                end
+                thisL = sqrt(D2{m}(i,j,k)/Sigma_a2{m}(i,j,k)); % Characteristic Diffusion Length [cm]
+                if thisL < L % If smaller, use as new normalization length
+                    L = thisL;
+                end
             end
         end
     end
@@ -210,32 +212,11 @@ T_infty = TM_nom; % [K]
 
 G = 2; % Number of energy groups
 
-% % Define time stepping
-% Deltat = 1; % [s]
-
 %% Nondimensional Domain Prep
 % ------------------------------------------------------------------------------
 
 % Define physical domain
 size = Deltax*(i_max-1)*2; % FULL Domain Size [cm]
-
-% Unitless Constants
-T_r = T_infty; % [K]
-
-% VERIFY FOURIER NUMBER
-% Fo = 0; % Arbitrarily Small Initial Guess
-% for thisMat = 1:numel(M) % For each material
-%     thisk = M{thisMat}.k;
-%     thisrhoc_p = M{thisMat}.rhoc_p;
-%     thish = M{thisMat}.h;
-
-%     thisFo = thisk*Deltat/(thisrhoc_p*Deltax^2);
-    
-%     if thisFo > Fo % If larger, use as new fourier number
-%         Fo = thisFo;
-%     end
-% end
-% fprintf(1,'Fo = %f\n',Fo);
 
 % Define x and y values in spatial domain (fully dimensional)
 for i = 1:i_max
@@ -252,12 +233,6 @@ for i = 1:(2*i_max)-1
         fully(i,j) = Deltay*(j-1);
     end
 end
-
-% q3prime = zeros(i_max*j_max,1);
-
-% File Info
-subfolder='results\\project6\\';
-mkdir(fullfile(myCWD,subfolder));
 
 %% First, Solve for Fluid Flow (Invariate)
 % ------------------------------------------------------------------------------
@@ -282,16 +257,15 @@ for i = 2:i_max-1
         k_s = k + j_max;
 
         thisDomain = Domain(i, j);
-        if thisDomain == 1 % Fuel
-            A(k, k) = 1.0;
-            S(k) = myVel; % Bulk Core Velocity Source [cm/s]
-        end
-        if thisDomain == 2 % Moderator
+        if any(MODindeces == mat(k)) % If coolant
             A(k,k) = -2.0*(factorx + factory);
             A(k,k_e) = factorx;
             A(k,k_w) = factorx;
             A(k,k_n) = factory;
             A(k,k_s) = factory;
+        else % Fuel
+            A(k, k) = 1.0;
+            S(k) = myVel; % Bulk Core Velocity Source [cm/s]
         end
     end
 end
@@ -307,16 +281,15 @@ for i = 2:i_max-1 % Avoid corners
         k_w = sympmap(i,j,j_max)+j_max;
 
         thisDomain = Domain(i, j);
-        if thisDomain == 1 % Fuel
-            A(k, k) = 1.0;
-            S(k) = myVel; % Bulk Core Velocity Source [cm/s]
-        end
-        if thisDomain == 2 % Moderator
+        if any(MODindeces == mat(k)) % If coolant
             A(k,k) = -2.0*(factorx + factory);
             A(k,k_e) = A(k,k_e) + factorx;
             A(k,k_w) = A(k,k_w) + factorx;
             A(k,k_n) = A(k,k_n) + factory;
             A(k,k_s) = A(k,k_s) + factory;
+        else % Fuel
+            A(k, k) = 1.0;
+            S(k) = myVel; % Bulk Core Velocity Source [cm/s]
         end
     end
 end
@@ -346,16 +319,15 @@ for i = 1:1
         k_n = sympmap(i,j,j_max)+1;
 
         thisDomain = Domain(i, j);
-        if thisDomain == 1 % Fuel
-            A(k, k) = 1.0;
-            S(k) = myVel; % Bulk Core Velocity Source [cm/s]
-        end
-        if thisDomain == 2 % Moderator
+        if any(MODindeces == mat(k)) % If coolant
             A(k,k) = -2.0*(factorx + factory);
             A(k,k_e) = A(k,k_e) + factorx;
             A(k,k_w) = A(k,k_w) + factorx;
             A(k,k_n) = A(k,k_n) + factory;
             A(k,k_s) = A(k,k_s) + factory;
+        else % Fuel
+            A(k, k) = 1.0;
+            S(k) = myVel; % Bulk Core Velocity Source [cm/s]
         end
     end
 end
@@ -370,16 +342,15 @@ k_n = k_e;
 k_w = k_s;
 
 thisDomain = Domain(i, j);
-if thisDomain == 1 % Fuel
-    A(k, k) = 1.0;
-    S(k) = myVel; % Bulk Core Velocity Source [cm/s]
-end
-if thisDomain == 2 % Moderator
+if any(MODindeces == mat(k)) % If coolant
     A(k,k) = -2.0*(factorx + factory);
     A(k,k_e) = A(k,k_e) + factorx;
     A(k,k_w) = A(k,k_w) + factorx;
     A(k,k_n) = A(k,k_n) + factory;
     A(k,k_s) = A(k,k_s) + factory;
+else % Fuel
+    A(k, k) = 1.0;
+    S(k) = myVel; % Bulk Core Velocity Source [cm/s]
 end
 
 fprintf('Solving for %i degrees of freedom...\n', i_max*j_max);
@@ -465,13 +436,8 @@ while abs(keff_iter - 1.0) > kEpsilon
                     thisMat = Domain(i, j);
                     thisT = T(kpos);
 
-                    if thisMat == 1 % Fuel
-                        thisD = FUL_D(thisT, TMOD, myBOR, group);
-                        thisSig_R = FUL_Sigma_R(thisT, TMOD, myBOR, group);
-                    elseif thisMat == 2 % Moderator
-                        thisD = MOD_D(TFUL, thisT, myBOR, group);
-                        thisSig_R = MOD_Sigma_R(TFUL, thisT, myBOR, group);
-                    end
+                    thisD = myD(thisT, TMOD, myBOR, group, thisMat);
+                    thisSig_R = mySigma_R(thisT, TMOD, myBOR, group, thisMat);
 
                     % pointer mapping goes row-by-row to assemble Coeff. Matrix
                     H(k,k) = L*thisSig_R*(1.0) + (thisD/L)*((2.0/Deltaxbar^2) + (2.0/Deltaybar^2));
@@ -485,14 +451,9 @@ while abs(keff_iter - 1.0) > kEpsilon
                         % tok = kpos + (group-1)*i_max*j_max;
                         tok = k;
                         fromk = kpos + (gprime-1)*i_max*j_max;
-                        
-                        if thisMat == 1 % Fuel
-                            nuSig_fgprime = FUL_nuSigma_f(thisT, TMOD, myBOR, gprime);
-                            Sig_sgprimeg = FUL_Sigma_s(thisT, TMOD, myBOR, gprime, group);
-                        elseif thisMat == 2 % Moderator
-                            nuSig_fgprime = MOD_nuSigma_f(TFUL, thisT, myBOR, gprime);
-                            Sig_sgprimeg = MOD_Sigma_s(TFUL, thisT, myBOR, gprime, group);
-                        end 
+
+                        nuSig_fgprime = mynuSigma_f(thisT, TMOD, myBOR, gprime, thisMat);
+                        Sig_sgprimeg = mySigma_s(thisT, TMOD, myBOR, gprime, group, thisMat);
 
                         F(tok,fromk) = L*chi_g*nuSig_fgprime*(1.0);
                         S(tok,fromk) = L*Sig_sgprimeg*(1.0);
@@ -518,13 +479,8 @@ while abs(keff_iter - 1.0) > kEpsilon
                     thisMat = Domain(i, j);
                     thisT = T(kpos);
 
-                    if thisMat == 1 % Fuel
-                        thisD = FUL_D(thisT, TMOD, myBOR, group);
-                        thisSig_R = FUL_Sigma_R(thisT, TMOD, myBOR, group);
-                    elseif thisMat == 2 % Moderator
-                        thisD = MOD_D(TFUL, thisT, myBOR, group);
-                        thisSig_R = MOD_Sigma_R(TFUL, thisT, myBOR, group);
-                    end
+                    thisD = myD(thisT, TMOD, myBOR, group, thisMat);
+                    thisSig_R = mySigma_R(thisT, TMOD, myBOR, group, thisMat);
 
                     % pointer mapping goes row-by-row to assemble Coeff. Matrix
                     H(k,k) = L*thisSig_R*(1.0) + (thisD/L)*((2.0/Deltaxbar^2) + (2.0/Deltaybar^2));
@@ -538,14 +494,9 @@ while abs(keff_iter - 1.0) > kEpsilon
                         % tok = kpos + (group-1)*i_max*j_max;
                         tok = k;
                         fromk = kpos + (gprime-1)*i_max*j_max;
-                        
-                        if thisMat == 1 % Fuel
-                            nuSig_fgprime = FUL_nuSigma_f(thisT, TMOD, myBOR, gprime);
-                            Sig_sgprimeg = FUL_Sigma_s(thisT, TMOD, myBOR, gprime, group);
-                        elseif thisMat == 2 % Moderator
-                            nuSig_fgprime = MOD_nuSigma_f(TFUL, thisT, myBOR, gprime);
-                            Sig_sgprimeg = MOD_Sigma_s(TFUL, thisT, myBOR, gprime, group);
-                        end 
+
+                        nuSig_fgprime = mynuSigma_f(thisT, TMOD, myBOR, gprime, thisMat);
+                        Sig_sgprimeg = mySigma_s(thisT, TMOD, myBOR, gprime, group, thisMat);
 
                         F(tok,fromk) = L*chi_g*nuSig_fgprime*(1.0);
                         S(tok,fromk) = L*Sig_sgprimeg*(1.0);
@@ -591,13 +542,8 @@ while abs(keff_iter - 1.0) > kEpsilon
                     thisMat = Domain(i, j);
                     thisT = T(kpos);
 
-                    if thisMat == 1 % Fuel
-                        thisD = FUL_D(thisT, TMOD, myBOR, group);
-                        thisSig_R = FUL_Sigma_R(thisT, TMOD, myBOR, group);
-                    elseif thisMat == 2 % Moderator
-                        thisD = MOD_D(TFUL, thisT, myBOR, group);
-                        thisSig_R = MOD_Sigma_R(TFUL, thisT, myBOR, group);
-                    end
+                    thisD = myD(thisT, TMOD, myBOR, group, thisMat);
+                    thisSig_R = mySigma_R(thisT, TMOD, myBOR, group, thisMat);
 
                     % pointer mapping goes row-by-row to assemble Coeff. Matrix
                     H(k,k) = L*thisSig_R*(1.0) + (thisD/L)*((2.0/Deltaxbar^2) + (2.0/Deltaybar^2));
@@ -611,14 +557,9 @@ while abs(keff_iter - 1.0) > kEpsilon
                         % tok = kpos + (group-1)*i_max*j_max;
                         tok = k;
                         fromk = kpos + (gprime-1)*i_max*j_max;
-                        
-                        if thisMat == 1 % Fuel
-                            nuSig_fgprime = FUL_nuSigma_f(thisT, TMOD, myBOR, gprime);
-                            Sig_sgprimeg = FUL_Sigma_s(thisT, TMOD, myBOR, gprime, group);
-                        elseif thisMat == 2 % Moderator
-                            nuSig_fgprime = MOD_nuSigma_f(TFUL, thisT, myBOR, gprime);
-                            Sig_sgprimeg = MOD_Sigma_s(TFUL, thisT, myBOR, gprime, group);
-                        end 
+
+                        nuSig_fgprime = mynuSigma_f(thisT, TMOD, myBOR, gprime, thisMat);
+                        Sig_sgprimeg = mySigma_s(thisT, TMOD, myBOR, gprime, group, thisMat);
 
                         F(tok,fromk) = L*chi_g*nuSig_fgprime*(1.0);
                         S(tok,fromk) = L*Sig_sgprimeg*(1.0);
@@ -642,13 +583,8 @@ while abs(keff_iter - 1.0) > kEpsilon
             thisMat = Domain(i, j);
             thisT = T(kpos);
 
-            if thisMat == 1 % Fuel
-                thisD = FUL_D(thisT, TMOD, myBOR, group);
-                thisSig_R = FUL_Sigma_R(thisT, TMOD, myBOR, group);
-            elseif thisMat == 2 % Moderator
-                thisD = MOD_D(TFUL, thisT, myBOR, group);
-                thisSig_R = MOD_Sigma_R(TFUL, thisT, myBOR, group);
-            end
+            thisD = myD(thisT, TMOD, myBOR, group, thisMat);
+            thisSig_R = mySigma_R(thisT, TMOD, myBOR, group, thisMat);
 
             % pointer mapping goes row-by-row to assemble Coeff. Matrix
             H(k,k) = L*thisSig_R*(1.0) + (thisD/L)*((2.0/Deltaxbar^2) + (2.0/Deltaybar^2));
@@ -662,14 +598,9 @@ while abs(keff_iter - 1.0) > kEpsilon
                 % tok = kpos + (group-1)*i_max*j_max;
                 tok = k;
                 fromk = kpos + (gprime-1)*i_max*j_max;
-                
-                if thisMat == 1 % Fuel
-                    nuSig_fgprime = FUL_nuSigma_f(thisT, TMOD, myBOR, gprime);
-                    Sig_sgprimeg = FUL_Sigma_s(thisT, TMOD, myBOR, gprime, group);
-                elseif thisMat == 2 % Moderator
-                    nuSig_fgprime = MOD_nuSigma_f(TFUL, thisT, myBOR, gprime);
-                    Sig_sgprimeg = MOD_Sigma_s(TFUL, thisT, myBOR, gprime, group);
-                end 
+
+                nuSig_fgprime = mynuSigma_f(thisT, TMOD, myBOR, gprime, thisMat);
+                Sig_sgprimeg = mySigma_s(thisT, TMOD, myBOR, gprime, group, thisMat);
 
                 F(tok,fromk) = L*chi_g*nuSig_fgprime*(1.0);
                 S(tok,fromk) = L*Sig_sgprimeg*(1.0);
@@ -684,8 +615,6 @@ while abs(keff_iter - 1.0) > kEpsilon
         % Amat = (H-S)\F; % Memory-Intensive
         fprintf('Unifying Matrices...\n');
         Amat = (H-S)\F; % Enforce Memory Clearing (since MATLAB is weird about it)
-        % fprintf('paused...')
-        % pause()
         clearvars H S F
 
         % Init iteration vars
@@ -746,7 +675,6 @@ while abs(keff_iter - 1.0) > kEpsilon
 
         q3prime = phi(1:i_max*j_max)+phi(1+i_max*j_max:2*i_max*j_max);
         q3prime = (totLinPwr/4)*q3prime/(sum(q3prime,'all')*Deltax*Deltay);
-        % q3prime = (totPwr/4)*q3prime/(sum(q3prime,'all')*Deltax*Deltay);
 
         clearvars Amat
 
@@ -766,7 +694,7 @@ while abs(keff_iter - 1.0) > kEpsilon
         % Init Thermal Matrices
         A = spalloc(i_max*j_max, i_max*j_max, 5*i_max*j_max); % Sparsely allocate Diffusion Operator with 5 bands
         Q = zeros(i_max*j_max, 1); % Allocate Heat Source/Removal Vector
-        % Q = q3prime - MOD_rhoc_p*dTdz*w;
+        
         for i = 2:i_max-1
             for j = 2:j_max-1
                 k = pmap(i, j, j_max); % what node #
@@ -775,8 +703,6 @@ while abs(keff_iter - 1.0) > kEpsilon
                 k_n = k - j_max;
                 k_s = k + j_max;
 
-                % thisMat = Domain(k); % what material
-                % matnum = mat(k); % what material
                 thisk_k = M{mat(k)}.k;
                 thisk_ke = M{mat(k_e)}.k;
                 thisk_kw = M{mat(k_w)}.k;
@@ -784,35 +710,7 @@ while abs(keff_iter - 1.0) > kEpsilon
                 thisk_ks = M{mat(k_s)}.k;
                 % thisrhoc_p = M{mat(k)}.rhoCp;
 
-                if mat(k) == 1 % Fuel
-                    heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
-                    if mat(k_e) == 2
-                        flux_e = h/Deltax;
-                        % heatremoval = heatremoval - h*T_infty/Deltax;
-                    else
-                        flux_e = (thisk_ke+thisk_k)/Deltax^2;
-                    end
-                    if mat(k_w) == 2
-                        flux_w = h/Deltax;
-                        % heatremoval = heatremoval - h*T_infty/Deltax;
-                    else
-                        flux_w = (thisk_kw+thisk_k)/Deltax^2;
-                    end
-                    if mat(k_n) == 2
-                        flux_n = h/Deltay;
-                        % heatremoval = heatremoval - h*T_infty/Deltay;
-                    else
-                        flux_n = (thisk_kn+thisk_k)/Deltay^2;
-                    end
-                    if mat(k_s) == 2
-                        flux_s = h/Deltay;
-                        % heatremoval = heatremoval - h*T_infty/Deltay;
-                    else
-                        flux_s = (thisk_ks+thisk_k)/Deltay^2;
-                    end
-                else
-                    % A(k,k) = 1.0;
-                    % Q(k) = T_infty;
+                if any(MODindeces == mat(k)) % If coolant
                     heatremoval = MOD_rhoc_p*dTdz*w(k);
                     if mat(k_e) == 1
                         flux_e = h/Deltax;
@@ -834,6 +732,28 @@ while abs(keff_iter - 1.0) > kEpsilon
                     else
                         flux_s = (thisk_ks+thisk_k)/Deltay^2;
                     end
+                else % Fuel
+                    heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
+                    if any(MODindeces == mat(k_e))
+                        flux_e = h/Deltax;
+                    else
+                        flux_e = (thisk_ke+thisk_k)/Deltax^2;
+                    end
+                    if any(MODindeces == mat(k_w))
+                        flux_w = h/Deltax;
+                    else
+                        flux_w = (thisk_kw+thisk_k)/Deltax^2;
+                    end
+                    if any(MODindeces == mat(k_n))
+                        flux_n = h/Deltay;
+                    else
+                        flux_n = (thisk_kn+thisk_k)/Deltay^2;
+                    end
+                    if any(MODindeces == mat(k_s))
+                        flux_s = h/Deltay;
+                    else
+                        flux_s = (thisk_ks+thisk_k)/Deltay^2;
+                    end
                 end
                 A(k,k) = flux_e + flux_w + flux_n + flux_s;
                 A(k,k_e) = A(k,k_e) - flux_e;
@@ -841,15 +761,6 @@ while abs(keff_iter - 1.0) > kEpsilon
                 A(k,k_n) = A(k,k_n) - flux_n;
                 A(k,k_s) = A(k,k_s) - flux_s;
                 Q(k) = (q3prime(k) - heatremoval);
-
-                % pointer mapping goes row-by-row to assemble Coeff. Matrix
-                % A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
-                % A(k,k_e) = -(thisk_ke+thisk_k)/Deltax^2;
-                % A(k,k_w) = -(thisk_kw+thisk_k)/Deltax^2;
-                % A(k,k_n) = -(thisk_kn+thisk_k)/Deltay^2;
-                % A(k,k_s) = -(thisk_ks+thisk_k)/Deltay^2;
-                % %
-                % Q(k) = (q3prime(k) - heatremoval)/1E4;
             end
         end
 
@@ -873,35 +784,7 @@ while abs(keff_iter - 1.0) > kEpsilon
                 thisk_ks = M{mat(k_s)}.k;
                 % thisrhoc_p = M{mat(k)}.rhoCp;
 
-                if mat(k) == 1 % Fuel
-                    heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
-                    if mat(k_e) == 2
-                        flux_e = h/Deltax;
-                        % heatremoval = heatremoval - h*T_infty/Deltax;
-                    else
-                        flux_e = (thisk_ke+thisk_k)/Deltax^2;
-                    end
-                    if mat(k_w) == 2
-                        flux_w = h/Deltax;
-                        % heatremoval = heatremoval - h*T_infty/Deltax;
-                    else
-                        flux_w = (thisk_kw+thisk_k)/Deltax^2;
-                    end
-                    if mat(k_n) == 2
-                        flux_n = h/Deltay;
-                        % heatremoval = heatremoval - h*T_infty/Deltay;
-                    else
-                        flux_n = (thisk_kn+thisk_k)/Deltay^2;
-                    end
-                    if mat(k_s) == 2
-                        flux_s = h/Deltay;
-                        % heatremoval = heatremoval - h*T_infty/Deltay;
-                    else
-                        flux_s = (thisk_ks+thisk_k)/Deltay^2;
-                    end
-                else
-                    % A(k,k) = 1.0;
-                    % Q(k) = T_infty;
+                if any(MODindeces == mat(k)) % If coolant
                     heatremoval = MOD_rhoc_p*dTdz*w(k);
                     if mat(k_e) == 1
                         flux_e = h/Deltax;
@@ -923,6 +806,28 @@ while abs(keff_iter - 1.0) > kEpsilon
                     else
                         flux_s = (thisk_ks+thisk_k)/Deltay^2;
                     end
+                else % Fuel
+                    heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
+                    if any(MODindeces == mat(k_e))
+                        flux_e = h/Deltax;
+                    else
+                        flux_e = (thisk_ke+thisk_k)/Deltax^2;
+                    end
+                    if any(MODindeces == mat(k_w))
+                        flux_w = h/Deltax;
+                    else
+                        flux_w = (thisk_kw+thisk_k)/Deltax^2;
+                    end
+                    if any(MODindeces == mat(k_n))
+                        flux_n = h/Deltay;
+                    else
+                        flux_n = (thisk_kn+thisk_k)/Deltay^2;
+                    end
+                    if any(MODindeces == mat(k_s))
+                        flux_s = h/Deltay;
+                    else
+                        flux_s = (thisk_ks+thisk_k)/Deltay^2;
+                    end
                 end
                 A(k,k) = flux_e + flux_w + flux_n + flux_s;
                 A(k,k_e) = A(k,k_e) - flux_e;
@@ -930,15 +835,6 @@ while abs(keff_iter - 1.0) > kEpsilon
                 A(k,k_n) = A(k,k_n) - flux_n;
                 A(k,k_s) = A(k,k_s) - flux_s;
                 Q(k) = (q3prime(k) - heatremoval);
-
-                % pointer mapping goes row-by-row to assemble Coeff. Matrix
-                % A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
-                % A(k,k_e) = A(k,k_e) - (thisk_ke+thisk_k)/Deltax^2;
-                % A(k,k_w) = A(k,k_w) - (thisk_kw+thisk_k)/Deltax^2;
-                % A(k,k_n) = A(k,k_n) - (thisk_kn+thisk_k)/Deltay^2;
-                % A(k,k_s) = A(k,k_s) - (thisk_ks+thisk_k)/Deltay^2;
-                %
-                % Q(k) = (q3prime(k) - heatremoval)/1E4;
             end
         end
         % Right BC
@@ -968,8 +864,6 @@ while abs(keff_iter - 1.0) > kEpsilon
                 k_s = k + j_max;
                 k_n = ksym + 1;
 
-                % thisMat = Domain(k); % what material
-                % matnum = mat(k); % what material
                 thisk_k = M{mat(k)}.k;
                 thisk_ke = M{mat(k_e)}.k;
                 thisk_kw = M{mat(k_w)}.k;
@@ -977,35 +871,7 @@ while abs(keff_iter - 1.0) > kEpsilon
                 thisk_ks = M{mat(k_s)}.k;
                 % thisrhoc_p = M{mat(k)}.rhoCp;
 
-                if mat(k) == 1 % Fuel
-                    heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
-                    if mat(k_e) == 2
-                        flux_e = h/Deltax;
-                        % heatremoval = heatremoval - h*T_infty/Deltax;
-                    else
-                        flux_e = (thisk_ke+thisk_k)/Deltax^2;
-                    end
-                    if mat(k_w) == 2
-                        flux_w = h/Deltax;
-                        % heatremoval = heatremoval - h*T_infty/Deltax;
-                    else
-                        flux_w = (thisk_kw+thisk_k)/Deltax^2;
-                    end
-                    if mat(k_n) == 2
-                        flux_n = h/Deltay;
-                        % heatremoval = heatremoval - h*T_infty/Deltay;
-                    else
-                        flux_n = (thisk_kn+thisk_k)/Deltay^2;
-                    end
-                    if mat(k_s) == 2
-                        flux_s = h/Deltay;
-                        % heatremoval = heatremoval - h*T_infty/Deltay;
-                    else
-                        flux_s = (thisk_ks+thisk_k)/Deltay^2;
-                    end
-                else
-                    % A(k,k) = 1.0;
-                    % Q(k) = T_infty;
+                if any(MODindeces == mat(k)) % If coolant
                     heatremoval = MOD_rhoc_p*dTdz*w(k);
                     if mat(k_e) == 1
                         flux_e = h/Deltax;
@@ -1027,6 +893,28 @@ while abs(keff_iter - 1.0) > kEpsilon
                     else
                         flux_s = (thisk_ks+thisk_k)/Deltay^2;
                     end
+                else % Fuel
+                    heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
+                    if any(MODindeces == mat(k_e))
+                        flux_e = h/Deltax;
+                    else
+                        flux_e = (thisk_ke+thisk_k)/Deltax^2;
+                    end
+                    if any(MODindeces == mat(k_w))
+                        flux_w = h/Deltax;
+                    else
+                        flux_w = (thisk_kw+thisk_k)/Deltax^2;
+                    end
+                    if any(MODindeces == mat(k_n))
+                        flux_n = h/Deltay;
+                    else
+                        flux_n = (thisk_kn+thisk_k)/Deltay^2;
+                    end
+                    if any(MODindeces == mat(k_s))
+                        flux_s = h/Deltay;
+                    else
+                        flux_s = (thisk_ks+thisk_k)/Deltay^2;
+                    end
                 end
                 A(k,k) = flux_e + flux_w + flux_n + flux_s;
                 A(k,k_e) = A(k,k_e) - flux_e;
@@ -1034,15 +922,6 @@ while abs(keff_iter - 1.0) > kEpsilon
                 A(k,k_n) = A(k,k_n) - flux_n;
                 A(k,k_s) = A(k,k_s) - flux_s;
                 Q(k) = (q3prime(k) - heatremoval);
-
-                % pointer mapping goes row-by-row to assemble Coeff. Matrix
-                % A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
-                % A(k,k_e) = A(k,k_e) - (thisk_ke+thisk_k)/Deltax^2;
-                % A(k,k_w) = A(k,k_w) - (thisk_kw+thisk_k)/Deltax^2;
-                % A(k,k_n) = A(k,k_n) - (thisk_kn+thisk_k)/Deltay^2;
-                % A(k,k_s) = A(k,k_s) - (thisk_ks+thisk_k)/Deltay^2;
-                %
-                % Q(k) = (q3prime(k) - heatremoval)/1E4;
             end
         end
 
@@ -1055,8 +934,6 @@ while abs(keff_iter - 1.0) > kEpsilon
         k_n = k_e;
         k_w = k_s;
 
-        % thisMat = Domain(k); % what material
-        % matnum = mat(k); % what material
         thisk_k = M{mat(k)}.k;
         thisk_ke = M{mat(k_e)}.k;
         thisk_kw = M{mat(k_w)}.k;
@@ -1064,35 +941,7 @@ while abs(keff_iter - 1.0) > kEpsilon
         thisk_ks = M{mat(k_s)}.k;
         % thisrhoc_p = M{mat(k)}.rhoCp;
 
-        if mat(k) == 1 % Fuel
-            heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
-            if mat(k_e) == 2
-                flux_e = h/Deltax;
-                % heatremoval = heatremoval - h*T_infty/Deltax;
-            else
-                flux_e = (thisk_ke+thisk_k)/Deltax^2;
-            end
-            if mat(k_w) == 2
-                flux_w = h/Deltax;
-                % heatremoval = heatremoval - h*T_infty/Deltax;
-            else
-                flux_w = (thisk_kw+thisk_k)/Deltax^2;
-            end
-            if mat(k_n) == 2
-                flux_n = h/Deltay;
-                % heatremoval = heatremoval - h*T_infty/Deltay;
-            else
-                flux_n = (thisk_kn+thisk_k)/Deltay^2;
-            end
-            if mat(k_s) == 2
-                flux_s = h/Deltay;
-                % heatremoval = heatremoval - h*T_infty/Deltay;
-            else
-                flux_s = (thisk_ks+thisk_k)/Deltay^2;
-            end
-        else
-            % A(k,k) = 1.0;
-            % Q(k) = T_infty;
+        if any(MODindeces == mat(k)) % If coolant
             heatremoval = MOD_rhoc_p*dTdz*w(k);
             if mat(k_e) == 1
                 flux_e = h/Deltax;
@@ -1114,6 +963,28 @@ while abs(keff_iter - 1.0) > kEpsilon
             else
                 flux_s = (thisk_ks+thisk_k)/Deltay^2;
             end
+        else % Fuel
+            heatremoval = modCorr*MOD_rhoc_p*dTdz*w(k);
+            if any(MODindeces == mat(k_e))
+                flux_e = h/Deltax;
+            else
+                flux_e = (thisk_ke+thisk_k)/Deltax^2;
+            end
+            if any(MODindeces == mat(k_w))
+                flux_w = h/Deltax;
+            else
+                flux_w = (thisk_kw+thisk_k)/Deltax^2;
+            end
+            if any(MODindeces == mat(k_n))
+                flux_n = h/Deltay;
+            else
+                flux_n = (thisk_kn+thisk_k)/Deltay^2;
+            end
+            if any(MODindeces == mat(k_s))
+                flux_s = h/Deltay;
+            else
+                flux_s = (thisk_ks+thisk_k)/Deltay^2;
+            end
         end
         A(k,k) = flux_e + flux_w + flux_n + flux_s;
         A(k,k_e) = A(k,k_e) - flux_e;
@@ -1121,15 +992,6 @@ while abs(keff_iter - 1.0) > kEpsilon
         A(k,k_n) = A(k,k_n) - flux_n;
         A(k,k_s) = A(k,k_s) - flux_s;
         Q(k) = (q3prime(k) - heatremoval);
-
-        % pointer mapping goes row-by-row to assemble Coeff. Matrix
-        % A(k,k) = (thisk_ke+2.0*thisk_k+thisk_kw)/Deltax^2 + (thisk_kn+2.0*thisk_k+thisk_ks)/Deltay^2;
-        % A(k,k_e) = A(k,k_e) - (thisk_ke+thisk_k)/Deltax^2;
-        % A(k,k_w) = A(k,k_w) - (thisk_kw+thisk_k)/Deltax^2;
-        % A(k,k_n) = A(k,k_n) - (thisk_kn+thisk_k)/Deltay^2;
-        % A(k,k_s) = A(k,k_s) - (thisk_ks+thisk_k)/Deltay^2;
-        % %
-        % Q(k) = (q3prime(k) - heatremoval)/1E4;
 
         fprintf('Solving for %i degrees of freedom...\n', i_max*j_max);
         T = A\Q; % Axial Flow Field [cm/s] -> forms a heat removal term
@@ -1186,7 +1048,7 @@ resultOut = fullfile(myCWD,subfolder,resultmat);
 % Parameters of Interest
 % myBOR [ppm]
 % keff_iter []
-save(resultOut, 'myBOR', 'keff_iter')
+save(resultOut, 'TM_nom', 'myBOR', 'keff_iter');
 
 % And Solution Matrices
 save(fullfile(myCWD,subfolder,'w.mat'), 'w');
@@ -1198,63 +1060,55 @@ save(fullfile(myCWD,subfolder,'TPlot.mat'), 'Tref2Plot');
 %% Functions
 % ------------------------------------------------------------------------------
 
-function D = FUL_D(tfu, tmo, bor, g)
-    global FUL_TFs;
-    global FUL_TMs;
-    global FUL_BORs;
-    global FUL_D1;
-    global FUL_D2;
+
+
+function D = myD(tfu, tmo, bor, g, matno)
+    global TFs;
+    global TMs;
+    global BORs;
+    global D1;
+    global D2;
     if g==1
-        D = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_D1, tfu, tmo, bor,'spline');
+        D = interpn(TFs{matno}, TMs{matno}, BORs{matno}, D1{matno}, tfu, tmo, bor,'spline');
     elseif g==2
-        D = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_D2, tfu, tmo, bor,'spline');
+        D = interpn(TFs{matno}, TMs{matno}, BORs{matno}, D2{matno}, tfu, tmo, bor,'spline');
     else
         D = 0;
     end
 end
 
-function Sigma_R = FUL_Sigma_R(tfu, tmo, bor, g)
-    global FUL_TFs;
-    global FUL_TMs;
-    global FUL_BORs;
-    global FUL_Sigma_R1;
-    global FUL_Sigma_R2;
+function Sigma_R = mySigma_R(tfu, tmo, bor, g, matno)
+    global TFs;
+    global TMs;
+    global BORs;
+    global Sigma_R1;
+    global Sigma_R2;
     if g==1
-        Sigma_R = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_Sigma_R1, tfu, tmo, bor,'spline');
+        Sigma_R = interpn(TFs{matno}, TMs{matno}, BORs{matno}, Sigma_R1{matno}, tfu, tmo, bor,'spline');
     elseif g==2
-        Sigma_R = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_Sigma_R2, tfu, tmo, bor,'spline');
+        Sigma_R = interpn(TFs{matno}, TMs{matno}, BORs{matno}, Sigma_R2{matno}, tfu, tmo, bor,'spline');
     else
         Sigma_R = 0;
     end
 end
 
-% function Sigma_a = FUL_Sigma_a(tfu, tmo, bor, g)
-%     if g==1
-%         Sigma_a = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_Sigma_a1, tfu, tmo, bor);
-%     elseif g==2
-%         Sigma_a = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_Sigma_a2, tfu, tmo, bor);
-%     else
-%         Sigma_a = 0;
-%     end
-% end
-
-function Sigma_s = FUL_Sigma_s(tfu, tmo, bor, gprime, g)
-    global FUL_TFs;
-    global FUL_TMs;
-    global FUL_BORs;
-    global FUL_Sigma_s11;
-    global FUL_Sigma_s12;
-    global FUL_Sigma_s21;
-    global FUL_Sigma_s22;
+function Sigma_s =mySigma_s(tfu, tmo, bor, gprime, g, matno)
+    global TFs;
+    global TMs;
+    global BORs;
+    % global Sigma_s11;
+    global Sigma_s12;
+    global Sigma_s21;
+    % global Sigma_s22;
     if gprime==1
         if g==1
             Sigma_s = 0; % interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_Sigma_s11, tfu, tmo, bor);
         elseif g==2
-            Sigma_s = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_Sigma_s12, tfu, tmo, bor,'spline');
+            Sigma_s = interpn(TFs{matno}, TMs{matno}, BORs{matno}, Sigma_s12{matno}, tfu, tmo, bor,'spline');
         end
     elseif gprime==2
         if g==1
-            Sigma_s = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_Sigma_s21, tfu, tmo, bor,'spline');
+            Sigma_s = interpn(TFs{matno}, TMs{matno}, BORs{matno}, Sigma_s21{matno}, tfu, tmo, bor,'spline');
         elseif g==2
             Sigma_s = 0; % interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_Sigma_s22, tfu, tmo, bor);
         end
@@ -1263,96 +1117,16 @@ function Sigma_s = FUL_Sigma_s(tfu, tmo, bor, gprime, g)
     end
 end
 
-function nuSigma_f = FUL_nuSigma_f(tfu, tmo, bor, g)
-    global FUL_TFs;
-    global FUL_TMs;
-    global FUL_BORs;
-    global FUL_nuSigma_f1;
-    global FUL_nuSigma_f2;
+function nuSigma_f = mynuSigma_f(tfu, tmo, bor, g, matno)
+    global TFs;
+    global TMs;
+    global BORs;
+    global nuSigma_f1;
+    global nuSigma_f2;
     if g==1
-        nuSigma_f = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_nuSigma_f1, tfu, tmo, bor,'spline');
+        nuSigma_f = interpn(TFs{matno}, TMs{matno}, BORs{matno}, nuSigma_f1{matno}, tfu, tmo, bor,'spline');
     elseif g==2
-        nuSigma_f = interpn(FUL_TFs, FUL_TMs, FUL_BORs, FUL_nuSigma_f2, tfu, tmo, bor,'spline');
-    else
-        nuSigma_f = 0;
-    end
-end
-
-function D = MOD_D(tfu, tmo, bor, g)
-    global MOD_TFs;
-    global MOD_TMs;
-    global MOD_BORs;
-    global MOD_D1;
-    global MOD_D2;
-    if g==1
-        D = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_D1, tfu, tmo, bor,'spline');
-    elseif g==2
-        D = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_D2, tfu, tmo, bor,'spline');
-    else
-        D = 0;
-    end
-end
-
-function Sigma_R = MOD_Sigma_R(tfu, tmo, bor, g)
-    global MOD_TFs;
-    global MOD_TMs;
-    global MOD_BORs;
-    global MOD_Sigma_R1;
-    global MOD_Sigma_R2;
-    if g==1
-        Sigma_R = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_Sigma_R1, tfu, tmo, bor,'spline');
-    elseif g==2
-        Sigma_R = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_Sigma_R2, tfu, tmo, bor,'spline');
-    else
-        Sigma_R = 0;
-    end
-end
-
-% function Sigma_a = MOD_Sigma_a(tfu, tmo, bor, g)
-%     if g==1
-%         Sigma_a = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_Sigma_a1, tfu, tmo, bor);
-%     elseif g==2
-%         Sigma_a = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_Sigma_a2, tfu, tmo, bor);
-%     else
-%         Sigma_a = 0;
-%     end
-% end
-
-function Sigma_s = MOD_Sigma_s(tfu, tmo, bor, gprime, g)
-    global MOD_TFs;
-    global MOD_TMs;
-    global MOD_BORs;
-    global MOD_Sigma_s11;
-    global MOD_Sigma_s12;
-    global MOD_Sigma_s21;
-    global MOD_Sigma_s22;
-    if gprime==1
-        if g==1
-            Sigma_s = 0; % interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_Sigma_s11, tfu, tmo, bor);
-        elseif g==2
-            Sigma_s = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_Sigma_s12, tfu, tmo, bor,'spline');
-        end
-    elseif gprime==2
-        if g==1
-            Sigma_s = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_Sigma_s21, tfu, tmo, bor,'spline');
-        elseif g==2
-            Sigma_s = 0; %  interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_Sigma_s22, tfu, tmo, bor);
-        end
-    else
-        Sigma_s = 0;
-    end
-end
-
-function nuSigma_f = MOD_nuSigma_f(tfu, tmo, bor, g)
-    global MOD_TFs;
-    global MOD_TMs;
-    global MOD_BORs;
-    global MOD_nuSigma_f1;
-    global MOD_nuSigma_f2;
-    if g==1
-        nuSigma_f = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_nuSigma_f1, tfu, tmo, bor,'spline');
-    elseif g==2
-        nuSigma_f = interpn(MOD_TFs, MOD_TMs, MOD_BORs, MOD_nuSigma_f2, tfu, tmo, bor,'spline');
+        nuSigma_f = interpn(TFs{matno}, TMs{matno}, BORs{matno}, nuSigma_f2{matno}, tfu, tmo, bor,'spline');
     else
         nuSigma_f = 0;
     end
@@ -1361,14 +1135,8 @@ end
 % Pointer mapping function for 2D->1D transform of solution
 function k = pmap(i, j, j_max)
     k = j + (i-1)*j_max;
-    % k = i + (j-1)*i_max;
 end
 
 function symk = sympmap(i, j, j_max)
     symk = i + (j-1)*j_max;
-    % symk = (j_max-j+1) + (i_max-i)*j_max;
 end
-
-% function symk = sympmap(i, j, i_max, j_max)
-%     symk = (j_max-j+1) + (i_max-i)*j_max;
-% end
