@@ -115,9 +115,9 @@ def parseCASMOOutput(filepath, csvout):
     print(f"Data successfully written to {csvout}")
     return dictList
 
-myCASMO = 'proj6Data\\CASMO\\nuscalePwr2.out'
-myCSV = 'proj6Data\\neutronData\\nuscalePwr2.csv'
-myMat = 'proj6Data\\neutronData\\interpTables2.mat'
+myCASMO = 'proj6Data\\CASMO\\nuscalePwrREF.out'
+myCSV = 'proj6Data\\neutronData\\nuscalePwrREF.csv'
+myMat = 'proj6Data\\neutronData\\interpTablesREF.mat'
 
 myDictList = parseCASMOOutput(myCASMO, myCSV)
 
