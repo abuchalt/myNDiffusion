@@ -115,14 +115,14 @@ def parseCASMOOutput(filepath, csvout):
     print(f"Data successfully written to {csvout}")
     return dictList
 
-myCASMO = 'proj6Data\\CASMO\\nuscalePwrREF.out'
-myCSV = 'proj6Data\\neutronData\\nuscalePwrREF.csv'
-myMat = 'proj6Data\\neutronData\\interpTablesMod.mat'
+myCASMO = 'proj6Data\\CASMO\\nuscalePwr2.out'
+myCSV = 'proj6Data\\neutronData\\nuscalePwr2.csv'
+myMat = 'proj6Data\\neutronData\\interpTables2.mat'
 
 myDictList = parseCASMOOutput(myCASMO, myCSV)
 
 # BORs = [0.0, 200.0, 400.0, 600.0, 800.0, 1000.0]
-BORs = [3000.0, 4500.0, 6000.0]
+BORs = [1000.0, 2500.0, 4000.0]
 # BURNUPs = [0.0, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0]
 # BURNUPS = [0.0]
 # TMs = [532.04, 547.04, 552.04, 557.04, 562.04, 567.04, 582.04]

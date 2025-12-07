@@ -82,7 +82,7 @@ print('PIN 1  ', R, ' ', R+g, ' ', R+g+c, '* FUEL PIN')
 print('PIN 2 ', ID_GT/2, ' ', OD_GT/2, ' /  \'COO\'    \'BOX\'  * INSTR TUBE') 
 print('PIN 3 ', ID_GT/2, ' ', OD_GT/2, '/   \'COO\'    \'BOX\'  * GUIDE TUBE')
 print('FUE 1,', rho_UO2*f, '/', E*1E2)
-BORs = [3000.0, 4500.0, 6000.0]
+BORs = [1000.0, 2500.0, 4000.0]
 TMs = [500, 557.0, 620.0]
 TFs = [600.0, 850.0, 1200.0]
 i=0

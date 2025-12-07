@@ -12,32 +12,34 @@ myCWD = pwd;
 
 % Thermal Data
 FUL = readtable(fullfile(myCWD,'proj6Data\\thermalData\\Fuel_Lump.csv'));
+FU2 = readtable(fullfile(myCWD,'proj6Data\\thermalData\\Fuel_Lump.csv'));
 MOD = readtable(fullfile(myCWD,'proj6Data\\thermalData\\H2O_Lump.csv'));
 % Cell Array of Materials
 %     1    2    3    4
-M = {FUL, MOD};
-MODindeces = [2]; % Which Indeces in the Cell Array are Coolant?
+M = {FUL, FU2, MOD};
+MODindeces = [3]; % Which Indeces in the Cell Array are Coolant?
 
 % Neutronics Interpolation Tables in Same Order as Materials Array
 myLibraries = {
     fullfile(myCWD,'proj6Data\\neutronData\\interpTables.mat'), % FUL 
+    fullfile(myCWD,'proj6Data\\neutronData\\interpTables2.mat'), % FU2 
     fullfile(myCWD,'proj6Data\\neutronData\\interpTablesMod.mat') % MOD
 };
 
 % Quarter-Core Layout
 LAYOUT = [
-    1 1 1 1 2
-    1 1 1 1 2
-    1 1 1 2 2
-    1 1 2 2 2
-    2 2 2 2 2
+    1 2 1 1 3
+    2 1 2 1 3
+    1 2 1 3 3
+    1 1 3 3 3
+    3 3 3 3 3
 ];
 
 TF_nom = 850.0; % Nominal Fuel Temperature [K]
 TM_nom = 557.0; % Nominal Moderator Temperature [K]
 
-myBORHi = 4745; % Boron Concentration [ppm] that yields k-eff > 1
-myBORLo = 4757; % k-eff < 1
+myBORHi = 2000; % Boron Concentration [ppm] that yields k-eff > 1
+myBORLo = 2000; % k-eff < 1
 % myBOR = 4780; % Soluble Poison Concentration
 
 % File Info
