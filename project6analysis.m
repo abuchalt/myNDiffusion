@@ -11,7 +11,7 @@ myCWD = pwd;
 % ------------------------------------------------------------------------------
 
 % File Info
-% subfolder='results\\project6\\shellFuel_TM557';
+subfolder='results\\project6\\shellFuel_TM557';
 % subfolder='results\\project6\\checkeredFuel_TM557';
 % subfolder='results\\project6\\uniformFuel_TM557';
 mkdir(fullfile(myCWD,subfolder));
