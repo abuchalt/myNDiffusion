@@ -28,9 +28,9 @@ myLibraries = {
 
 % Quarter-Core Layout
 LAYOUT = [
-    1 2 1 1 3
-    2 1 2 1 3
-    1 2 1 3 3
+    2 2 2 1 3
+    2 2 1 1 3
+    2 1 1 3 3
     1 1 3 3 3
     3 3 3 3 3
 ];
@@ -38,12 +38,12 @@ LAYOUT = [
 TF_nom = 850.0; % Nominal Fuel Temperature [K]
 TM_nom = 557.0; % Nominal Moderator Temperature [K]
 
-myBORHi = 2000; % Boron Concentration [ppm] that yields k-eff > 1
-myBORLo = 2000; % k-eff < 1
+myBORHi = 2.2459e+03; % Boron Concentration [ppm] that yields k-eff > 1
+myBORLo = 2.2659e+03; % k-eff < 1
 % myBOR = 4780; % Soluble Poison Concentration
 
 % File Info
-subfolder='results\\project6\\uniformFuel_TM557';
+subfolder='results\\project6\\shellFuel_TM557';
 mkdir(fullfile(myCWD,subfolder));
 
 %% Import Data
