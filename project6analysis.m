@@ -11,7 +11,7 @@ myCWD = pwd;
 % ------------------------------------------------------------------------------
 
 % File Info
-subfolder='results\\project6\\shellFuel_TM557';
+subfolder='results\\project6\\shellFuel_TM587';
 % subfolder='results\\project6\\checkeredFuel_TM557';
 % subfolder='results\\project6\\uniformFuel_TM557';
 mkdir(fullfile(myCWD,subfolder));
@@ -75,6 +75,8 @@ q3primeref2Plot = vertcat(q3primeref2, q3primeref1Plot);
 
 % Temperature
 TPlot;
+Tpeak = max(TPlot, [], 'all')
+Tmin = min(TPlot(TPlot > 900), [], 'all')
 
 % Coolant Velocity
 wPlot = reshape(w, i_max, j_max);
